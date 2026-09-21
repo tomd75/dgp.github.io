@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDL rayon bière</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style id="css">
+:root{
+  --bg:#F3F4F1; --surface:#FFFFFF; --ink:#1D1B18; --muted:#6B675F; --line:#DEDDD6;
+  --amber:#E3A21A; --amber-deep:#9A6A06; --amber-soft:#FBF0D6;
+  --hop:#2E4B3C; --hop-soft:#E3ECE6; --slate:#8C8F94; --danger:#B3261E;
+  --shadow:0 1px 2px rgba(29,27,24,.08),0 4px 14px rgba(29,27,24,.06);
+  --cond:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#16150F; --surface:#221F18; --ink:#F1EEE6; --muted:#A7A195; --line:#3A362C;
+    --amber:#F0B436; --amber-deep:#F6CB6A; --amber-soft:#3A2E12;
+    --hop:#8DC0A2; --hop-soft:#1F3228; --slate:#7C7F84; --danger:#F28B82;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16150F; --surface:#221F18; --ink:#F1EEE6; --muted:#A7A195; --line:#3A362C;
+  --amber:#F0B436; --amber-deep:#F6CB6A; --amber-soft:#3A2E12;
+  --hop:#8DC0A2; --hop-soft:#1F3228; --slate:#7C7F84; --danger:#F28B82;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:16px/1.45 var(--sans);-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.top-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;max-width:760px;margin:0 auto}
+.brand{font:700 22px/1 var(--cond);letter-spacing:.2px}
+.brand small{font:500 14px var(--sans);color:var(--muted);margin-left:6px}
+.sync{font-size:13px;color:var(--muted)}
+
+main{max-width:760px;margin:0 auto;padding:16px 16px 190px}
+.view{display:none}
+.view.on{display:block}
+
+h2{font:700 26px/1.1 var(--cond);margin:22px 0 6px}
+h2:first-child{margin-top:4px}
+h3{font:600 19px/1.2 var(--cond);margin:0}
+p.hint{margin:0 0 12px;color:var(--muted);font-size:14px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:13px;color:var(--muted)}
+.field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;min-height:44px;width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:420px){.grid3{grid-template-columns:1fr 1fr}}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 14px;min-height:44px;font-weight:600}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.amber{background:var(--amber);color:#1D1B18;border-color:var(--amber)}
+.btn.ghost{background:transparent}
+.btn.small{min-height:36px;padding:6px 10px;font-size:14px}
+.btn.danger{color:var(--danger)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.icon-btn{border:none;background:transparent;width:40px;height:40px;border-radius:10px;display:inline-grid;place-items:center;color:var(--muted);font-size:20px}
+.icon-btn:hover{background:var(--bg)}
+
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);flex-shrink:0}
+.stepper button{width:44px;height:44px;border:none;background:transparent;font-size:22px;font-weight:600}
+.stepper input{width:48px;height:44px;border:none;background:transparent;text-align:center;font:700 20px var(--cond);-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stepper.sm button{width:36px;height:36px;font-size:18px}
+.stepper.sm input{width:40px;height:36px;font-size:17px}
+
+.row-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.pill.abi{background:var(--amber-soft);color:var(--amber-deep);border-color:transparent}
+.pill.cab{background:var(--hop-soft);color:var(--hop);border-color:transparent}
+
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg)}
+.seg button{border:none;background:transparent;padding:8px 12px;min-height:40px;font-size:14px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin:8px 0 12px;scrollbar-width:none}
+.chips button{flex-shrink:0;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:500}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.search{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;min-height:48px}
+
+.brand-group{margin-bottom:14px}
+.brand-title{display:flex;align-items:baseline;justify-content:space-between;font:600 18px var(--cond);padding:4px 2px 6px}
+.brand-title span.sum{font:500 14px var(--sans);color:var(--muted)}
+.prod{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
+.prod.has{border-color:var(--amber)}
+.prod .info{flex:1;min-width:0}
+.prod .name{font-weight:600;line-height:1.25}
+.prod .meta{font-size:13px;color:var(--muted)}
+.prod .w-input{width:84px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px;text-align:right;min-height:40px}
+.prod .unit{font-size:13px;color:var(--muted)}
+
+.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+
+/* Barre de résultat collante */
+.live{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.live-inner{max-width:760px;margin:0 auto;padding:10px 16px 0}
+.live-nums{display:flex;gap:16px;align-items:flex-end}
+.live-nums .big{font:700 34px/1 var(--cond)}
+.live-nums .lbl{font-size:12px;color:var(--muted)}
+.live-nums .mid{font:600 20px/1 var(--cond)}
+nav.tabs{display:grid;grid-template-columns:repeat(4,1fr);max-width:760px;margin:6px auto 0}
+nav.tabs button{border:none;background:transparent;padding:10px 4px 12px;font:600 14px var(--sans);color:var(--muted);border-top:3px solid transparent}
+nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--amber)}
+
+/* Linéaire vu de face */
+.shelf{margin:10px 0 4px}
+.shelf-track{display:flex;height:46px;border-radius:6px;overflow:hidden;background:repeating-linear-gradient(135deg,var(--bg) 0 6px,var(--line) 6px 8px);border:2px solid var(--ink)}
+.shelf-track div{height:100%;border-right:2px solid var(--surface);min-width:0}
+.shelf-foot{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+.legend{display:grid;gap:6px;margin-top:12px}
+.legend .li{display:grid;grid-template-columns:14px 1fr auto auto;gap:10px;align-items:center;font-size:15px}
+.legend .sw{width:14px;height:14px;border-radius:3px}
+.legend .v{font:600 17px var(--cond);text-align:right;min-width:54px}
+.legend .m{color:var(--muted);font-size:13px;text-align:right;min-width:62px}
+
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi .n{font:700 30px/1 var(--cond)}
+.kpi .t{font-size:13px;color:var(--muted);margin-top:4px}
+.kpi.hero{grid-column:1/-1;background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.kpi.hero .n{font-size:64px;color:var(--amber)}
+.kpi.hero .t{color:inherit;opacity:.8;font-size:15px}
+.table{width:100%;border-collapse:collapse;font-size:15px}
+.table td{padding:8px 0;border-bottom:1px solid var(--line)}
+.table td:last-child{text-align:right;font-weight:600}
+.sellfi{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--amber-soft);border-radius:12px;padding:12px 14px;margin-top:12px}
+.sellfi b{font:700 26px var(--cond)}
+.warn{background:var(--amber-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+
+.list-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.list-item:last-child{border-bottom:none}
+.list-item .grow{flex:1;min-width:0}
+.list-item .inline{width:84px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px;text-align:right;min-height:40px}
+.list-item .inline.txt{width:auto;flex:1;text-align:left}
+
+details.rule{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:8px}
+details.rule summary{font-weight:600;cursor:pointer}
+details.rule p{margin:8px 0 0;font-size:14px;color:var(--muted)}
+
+/* Feuille modale */
+dialog{border:none;border-radius:18px 18px 0 0;padding:0;width:100%;max-width:560px;margin:auto auto 0;background:var(--surface);color:var(--ink);max-height:90%}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+@media (min-width:640px){dialog{border-radius:18px;margin:auto}}
+.sheet{padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:12px}
+.sheet textarea{width:100%;min-height:160px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.toast{position:fixed;left:50%;bottom:170px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<template id="markup">
+<header class="top">
+  <div class="top-row">
+    <div class="brand">PDL rayon bière<small id="storeLabel">Nouveau relevé</small></div>
+    <div class="sync" id="syncLabel">Hors ligne</div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ RAYON ============ -->
+  <section class="view on" id="v-rayon" aria-label="Rayon">
+    <h2>Magasin</h2>
+    <div class="card grid2">
+      <div class="field"><label for="magasin">Nom du magasin</label><input id="magasin" placeholder="Ex. Carrefour Vénissieux"></div>
+      <div class="field"><label for="date">Date du relevé</label><input id="date" type="date"></div>
+    </div>
+
+    <h2>Éléments du rayon</h2>
+    <p class="hint">Un bloc par groupe d'éléments identiques. Un élément mixte (packs et cave à bière) se déclare en segment « Mixte ».</p>
+    <div id="elemList"></div>
+    <button class="btn amber" id="addElem" style="width:100%">+ Ajouter des éléments</button>
+
+    <h2>Au sol</h2>
+    <p class="hint">Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Une demi-palette posée dans le mauvais sens compte pour deux. Les demi-palettes et palettes AB InBev comptent entières dans le LD : ne saisissez pas leurs facings.</p>
+    <div class="card">
+      <div class="row-head"><h3>Demi-palettes</h3><span class="pill" id="dpCm"></span></div>
+      <div class="grid2">
+        <div class="field"><label>Total</label><div data-bind="dp.total"></div></div>
+        <div class="field"><label>Dont AB InBev</label><div data-bind="dp.abi"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row-head"><h3>Palettes</h3><span class="pill" id="palCm"></span></div>
+      <div class="grid2">
+        <div class="field"><label>Total</label><div data-bind="pal.total"></div></div>
+        <div class="field"><label>Dont AB InBev</label><div data-bind="pal.abi"></div></div>
+      </div>
+    </div>
+
+    <h2>Mobilier</h2>
+    <p class="hint">Mobilier fournisseur : on le compte seulement s'il est intégré physiquement au rack bière.</p>
+    <div id="mobList"></div>
+    <button class="btn" id="addMob" style="width:100%">+ Ajouter un mobilier</button>
+
+    <div class="btn-row" style="margin-top:24px">
+      <button class="btn primary" data-goto="facings" style="flex:1">Passer aux facings</button>
+    </div>
+  </section>
+
+  <!-- ============ FACINGS ============ -->
+  <section class="view" id="v-facings" aria-label="Facings">
+    <h2>Facings</h2>
+    <p class="hint">Touchez + pour chaque facing. Un facing gerbé (deux packs superposés) compte pour un seul facing.</p>
+    <input class="search" id="fSearch" type="search" placeholder="Chercher une marque, un produit, un format">
+    <div class="chips" id="fChips"></div>
+    <div id="fList"></div>
+    <button class="btn" id="addLocalProd" style="width:100%;margin-top:6px">+ Produit absent de la liste</button>
+  </section>
+
+  <!-- ============ RÉSULTAT ============ -->
+  <section class="view" id="v-resultat" aria-label="Résultat">
+    <h2>Résultat</h2>
+    <div id="resBody"></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn primary" id="saveReleve" style="flex:1">Enregistrer le relevé</button>
+      <button class="btn" id="newReleve">Nouveau relevé</button>
+    </div>
+    <h2>Mes relevés</h2>
+    <div id="histList"></div>
+  </section>
+
+  <!-- ============ RÉFÉRENTIEL ============ -->
+  <section class="view" id="v-ref" aria-label="Référentiel">
+    <h2>Référentiel</h2>
+    <p class="hint" id="refMode"></p>
+    <div class="seg" role="group" aria-label="Rubrique" id="refTabs" style="margin-bottom:14px">
+      <button data-rt="produits" aria-pressed="true">Produits</button>
+      <button data-rt="elements" aria-pressed="false">Éléments</button>
+      <button data-rt="mobiliers" aria-pressed="false">Mobilier</button>
+      <button data-rt="params" aria-pressed="false">Règles</button>
+    </div>
+    <div id="pubBar" class="warn" hidden style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
+      <span id="pubMsg"></span>
+      <span class="btn-row"><button class="btn amber small" id="pubGo">Publier pour tous les M1</button><button class="btn ghost small" id="pubUndo">Annuler</button></span>
+    </div>
+    <div id="refBody"></div>
+  </section>
+</main>
+
+<div class="live">
+  <div class="live-inner">
+    <div class="live-nums">
+      <div><div class="big" id="liveP">0,0 %</div><div class="lbl">PDL AB InBev</div></div>
+      <div><div class="mid" id="liveD">0 cm</div><div class="lbl">DGP rayon</div></div>
+      <div><div class="mid" id="liveL">0 cm</div><div class="lbl">LD AB InBev</div></div>
+    </div>
+  </div>
+  <nav class="tabs" aria-label="Navigation">
+    <button data-goto="rayon" aria-current="page">Rayon</button>
+    <button data-goto="facings">Facings</button>
+    <button data-goto="resultat">Résultat</button>
+    <button data-goto="ref">Référentiel</button>
+  </nav>
+</div>
+
+<dialog id="dlg"><div class="sheet" id="dlgBody"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</template>
+<script id="ref-data" type="application/json">null</script>
+<script id="app">
+document.body.prepend(document.getElementById("markup").content.cloneNode(true));
+const HEAD_TAGS = "<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>PDL rayon bi\u00e8re</title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap\" rel=\"stylesheet\">";
+/* ------------------------------------------------------------------ */
+/* Données par défaut                                                  */
+/* ------------------------------------------------------------------ */
+const uid = () => Math.random().toString(36).slice(2, 10);
+const DEFAULT_REF = {
+  params: { dp: 180, pal: 360, elemRef: 133, etag: 5 },
+  elements: [
+    { id: "e133", nom: "Élément 1,33 m", largeur: 133 },
+    { id: "e100", nom: "Élément 1 m", largeur: 100 },
+    { id: "e125", nom: "Élément 1,25 m", largeur: 125 }
+  ],
+  mobiliers: [
+    { id: "m1", nom: "Meuble DP 3 étages", cm: 180, abi: false },
+    { id: "m2", nom: "Meuble DP 4 étages", cm: 210, abi: false },
+    { id: "m3", nom: "Frigo / meuble fûts DP", cm: 180, abi: false },
+    { id: "m4", nom: "Frigo / meuble fûts ½ élément", cm: 200, abi: false },
+    { id: "m5", nom: "Frigo Slim", cm: 100, abi: false },
+    { id: "m6", nom: "Meuble frigo / fûts 1 élément", cm: 399, abi: false },
+    { id: "m7", nom: "Corner Corona", cm: 470, abi: true },
+    { id: "m8", nom: "Corner Bosteels", cm: 454, abi: true },
+    { id: "m9", nom: "Corner BUD", cm: 539, abi: true }
+  ],
+  produits: [
+    ["Leffe","Blonde","Pack 12x25cl",26,"pack",true],
+    ["Leffe","Blonde","Pack 6x25cl",17,"pack",true],
+    ["Leffe","Ruby","Pack 6x25cl",17,"pack",true],
+    ["Leffe","Blonde","Bouteille 75cl",9,"cab",true],
+    ["Hoegaarden","Blanche","Pack 6x25cl",17,"pack",true],
+    ["Corona","Extra","Pack 6x35,5cl",19,"pack",true],
+    ["Corona","Extra","Pack 12x33cl can",27,"pack",true],
+    ["Stella Artois","Blonde","Pack 20x25cl",33,"pack",true],
+    ["Bud","Lager","Pack 12x25cl",26,"pack",true],
+    ["Tripel Karmeliet","Blonde","Bouteille 33cl",6.5,"cab",true],
+    ["Kwak","Ambrée","Pack 4x33cl",14,"pack",true],
+    ["Heineken","Blonde","Pack 12x25cl",26,"pack",false],
+    ["Kronenbourg","Blonde","Pack 26x25cl",40,"pack",false],
+    ["1664","Blonde","Pack 12x25cl",26,"pack",false],
+    ["Desperados","Original","Pack 6x33cl",18,"pack",false],
+    ["Affligem","Blonde","Pack 6x25cl",17,"pack",false],
+    ["Grimbergen","Blonde","Pack 6x25cl",17,"pack",false]
+  ].map(([marque,nom,format,largeur,segment,abi]) => ({ id: uid(), marque, nom, format, largeur, segment, abi })),
+  exemple: true
+};
+const newReleve = () => ({
+  id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
+  elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0 }],
+  dp: { total: 0, abi: 0 }, pal: { total: 0, abi: 0 },
+  mobiliers: [], facings: {}, locaux: []
+});
+
+/* ------------------------------------------------------------------ */
+/* État + stockage                                                     */
+/* ------------------------------------------------------------------ */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const EMBED = (() => { try { return JSON.parse(document.getElementById("ref-data").textContent); } catch { return null; } })();
+const PUBLISHED = EMBED && EMBED.produits ? EMBED : { ...structuredClone(DEFAULT_REF), rev: 0 };
+let REF = structuredClone(PUBLISHED);
+let refDirty = false;
+let R = LS.get("pdl.draft", null) || newReleve();
+let HIST = LS.get("pdl.hist", []);
+let canEditRef = false;     // devient vrai pour l'auteur de la page (ou pour un fichier ouvert hors claude.ai)
+let artifactApi = null;
+let refTab = "produits", fFilter = "tout", fQuery = "";
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const num = v => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : 0; };
+const fmtCm = n => `${Math.round(n).toLocaleString("fr-FR")} cm`;
+const fmtPct = n => `${(n * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 1800); }
+
+function saveDraft() { LS.set("pdl.draft", R); }
+function saveRef() {
+  refDirty = true;
+  LS.set("pdl.refDraft", { baseRev: PUBLISHED.rev || 0, ref: REF });
+  setSync(artifactApi ? "Modifications non publiées" : "Modifications non téléchargées");
+  renderPublishBar();
+}
+function setSync(t) { $("#syncLabel").textContent = t; }
+
+/* ------------------------------------------------------------------ */
+/* Calculs (règles PDL)                                                */
+/* ------------------------------------------------------------------ */
+function allProducts() { return [...REF.produits, ...R.locaux.map(p => ({ ...p, local: true }))]; }
+function elemType(id) { return REF.elements.find(e => e.id === id) || { nom: "Élément supprimé", largeur: 0 }; }
+
+function compute() {
+  const P = REF.params;
+  let dgpPack = 0, dgpCab = 0, ldPack = 0, ldCab = 0, elemEq = 0;
+  const lignes = [];
+  for (const g of R.elements) {
+    const w = num(elemType(g.typeId).largeur), nb = num(g.nb), et = num(g.etag), virt = num(g.virt);
+    const cab = g.segment === "cab" ? et : g.segment === "mixte" ? Math.min(num(g.cabParElem), et) : 0;
+    const pack = et - cab;
+    const vPack = g.segment === "cab" ? 0 : virt * w, vCab = g.segment === "cab" ? virt * w : 0;
+    dgpPack += w * nb * pack + vPack;
+    dgpCab += w * nb * cab + vCab;
+    elemEq += w === num(P.elemRef) ? nb : (nb * w) / num(P.elemRef || 133);
+  }
+  const dpCm = num(R.dp.total) * num(P.dp), palCm = num(R.pal.total) * num(P.pal);
+  dgpPack += dpCm + palCm;
+  const ldSol = num(R.dp.abi) * num(P.dp) + num(R.pal.abi) * num(P.pal);
+  ldPack += ldSol;
+  let ldMob = 0;
+  for (const m of R.mobiliers) {
+    const cat = REF.mobiliers.find(x => x.id === m.mobId); if (!cat) continue;
+    const cm = num(cat.cm) * num(m.nb);
+    if (m.segment === "cab") dgpCab += cm; else dgpPack += cm;
+    if (m.abi) { ldMob += cm; if (m.segment === "cab") ldCab += cm; else ldPack += cm; }
+  }
+  // Facings
+  const parMarque = {};
+  let relevePack = 0, releveCab = 0;
+  for (const p of allProducts()) {
+    const f = num(R.facings[p.id]); if (!f) continue;
+    const cm = f * num(p.largeur);
+    if (p.segment === "cab") releveCab += cm; else relevePack += cm;
+    if (p.abi) { if (p.segment === "cab") ldCab += cm; else ldPack += cm; }
+    const k = p.marque || "Sans marque";
+    parMarque[k] = parMarque[k] || { cm: 0, abi: p.abi, facings: 0 };
+    parMarque[k].cm += cm; parMarque[k].facings += f;
+  }
+  if (ldSol) { parMarque["Sol AB InBev (DP/palettes)"] = { cm: ldSol, abi: true, facings: 0 }; }
+  if (ldMob) { parMarque["Mobilier AB InBev"] = { cm: ldMob, abi: true, facings: 0 }; }
+  const dgp = dgpPack + dgpCab, ld = ldPack + ldCab;
+  const releve = relevePack + releveCab + ldSol + ldMob + (dpCm - num(R.dp.abi) * num(P.dp)) + (palCm - num(R.pal.abi) * num(P.pal));
+  return {
+    dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm,
+    pdl: dgp ? ld / dgp : 0, pdlPack: dgpPack ? ldPack / dgpPack : 0, pdlCab: dgpCab ? ldCab / dgpCab : 0,
+    nbElem: Math.round(elemEq + 1e-9), elemEq, parMarque, releve
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Composants                                                          */
+/* ------------------------------------------------------------------ */
+function stepperHTML(val, key, sm) {
+  return `<div class="stepper${sm ? " sm" : ""}"><button type="button" data-step="-1" data-key="${key}" aria-label="Moins">−</button><input inputmode="numeric" value="${num(val)}" data-key="${key}" aria-label="Quantité"><button type="button" data-step="1" data-key="${key}" aria-label="Plus">+</button></div>`;
+}
+function getPath(obj, path) { return path.split(".").reduce((o, k) => o?.[k], obj); }
+function setPath(obj, path, v) { const ks = path.split("."); const last = ks.pop(); ks.reduce((o, k) => o[k], obj)[last] = v; }
+
+/* Clés : "r:dp.total"  -> R ; "el:<id>:nb" -> élément ; "mob:<id>:nb" ; "f:<prodId>" */
+function readKey(key) {
+  const [scope, a, b] = key.split(":");
+  if (scope === "r") return getPath(R, a);
+  if (scope === "el") return R.elements.find(x => x.id === a)?.[b];
+  if (scope === "mob") return R.mobiliers.find(x => x.id === a)?.[b];
+  if (scope === "f") return R.facings[a] || 0;
+}
+function writeKey(key, v) {
+  v = Math.max(0, v);
+  const [scope, a, b] = key.split(":");
+  if (scope === "r") setPath(R, a, v);
+  else if (scope === "el") { const g = R.elements.find(x => x.id === a); if (g) g[b] = v; }
+  else if (scope === "mob") { const m = R.mobiliers.find(x => x.id === a); if (m) m[b] = v; }
+  else if (scope === "f") { if (v) R.facings[a] = v; else delete R.facings[a]; }
+  saveDraft(); refreshLive();
+}
+
+document.addEventListener("click", e => {
+  const st = e.target.closest("[data-step]");
+  if (st) {
+    const key = st.dataset.key, v = num(readKey(key)) + num(st.dataset.step);
+    writeKey(key, v);
+    const inp = st.parentElement.querySelector("input"); inp.value = Math.max(0, v);
+    if (key.startsWith("f:")) updateFacingRow(key.slice(2));
+    if (key.startsWith("r:dp") || key.startsWith("r:pal")) renderSolPills();
+    return;
+  }
+  const go = e.target.closest("[data-goto]");
+  if (go) { show(go.dataset.goto); }
+});
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.matches(".stepper input[data-key]")) {
+    writeKey(t.dataset.key, num(t.value));
+    if (t.dataset.key.startsWith("f:")) updateFacingRow(t.dataset.key.slice(2));
+    if (t.dataset.key.startsWith("r:dp") || t.dataset.key.startsWith("r:pal")) renderSolPills();
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Navigation                                                          */
+/* ------------------------------------------------------------------ */
+function show(v) {
+  document.querySelectorAll(".view").forEach(s => s.classList.toggle("on", s.id === "v-" + v));
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.goto === v ? "page" : "false"));
+  if (v === "facings") renderFacings();
+  if (v === "resultat") { renderResult(); renderHist(); }
+  if (v === "ref") renderRef();
+  window.scrollTo({ top: 0 });
+}
+
+/* ------------------------------------------------------------------ */
+/* Vue Rayon                                                           */
+/* ------------------------------------------------------------------ */
+function renderRayon() {
+  $("#magasin").value = R.magasin; $("#date").value = R.date;
+  $("#storeLabel").textContent = R.magasin || "Nouveau relevé";
+  document.querySelectorAll("[data-bind]").forEach(el => { el.innerHTML = stepperHTML(getPath(R, el.dataset.bind), "r:" + el.dataset.bind); });
+  renderElems(); renderMobs(); renderSolPills(); refreshLive();
+}
+function renderSolPills() {
+  $("#dpCm").textContent = fmtCm(num(R.dp.total) * num(REF.params.dp));
+  $("#palCm").textContent = fmtCm(num(R.pal.total) * num(REF.params.pal));
+}
+function renderElems() {
+  const opts = id => REF.elements.map(e => `<option value="${e.id}" ${e.id === id ? "selected" : ""}>${esc(e.nom)} (${e.largeur} cm)</option>`).join("");
+  $("#elemList").innerHTML = R.elements.map(g => `
+    <div class="card" data-el="${g.id}">
+      <div class="row-head">
+        <select class="field-sel" data-elf="typeId" aria-label="Type d'élément" style="flex:1;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px;min-height:44px">${opts(g.typeId)}</select>
+        <button class="icon-btn" data-delel="${g.id}" aria-label="Supprimer ce groupe">✕</button>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Nombre</label>${stepperHTML(g.nb, `el:${g.id}:nb`, true)}</div>
+        <div class="field"><label>Étagères / élément</label>${stepperHTML(g.etag, `el:${g.id}:etag`, true)}</div>
+        <div class="field"><label>Tablettes virtuelles</label>${stepperHTML(g.virt, `el:${g.id}:virt`, true)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+        <div class="seg" role="group" aria-label="Segment">
+          ${["pack","cab","mixte"].map(s => `<button type="button" data-seg="${s}" aria-pressed="${g.segment === s}">${{pack:"Packs",cab:"Cave à bière",mixte:"Mixte"}[s]}</button>`).join("")}
+        </div>
+        ${g.segment === "mixte" ? `<div class="field" style="flex-direction:row;align-items:center;gap:8px"><label>dont étagères CAB / élément</label>${stepperHTML(g.cabParElem, `el:${g.id}:cabParElem`, true)}</div>` : ""}
+      </div>
+    </div>`).join("") || `<div class="empty">Aucun élément. Ajoutez le premier groupe d'éléments du rayon.</div>`;
+}
+$("#elemList").addEventListener("change", e => {
+  const card = e.target.closest("[data-el]"); if (!card) return;
+  const g = R.elements.find(x => x.id === card.dataset.el);
+  if (e.target.dataset.elf) { g[e.target.dataset.elf] = e.target.value; saveDraft(); refreshLive(); }
+});
+$("#elemList").addEventListener("click", e => {
+  const card = e.target.closest("[data-el]"); if (!card) return;
+  const g = R.elements.find(x => x.id === card.dataset.el);
+  const sb = e.target.closest("[data-seg]");
+  if (sb) { g.segment = sb.dataset.seg; if (g.segment === "mixte" && !g.cabParElem) g.cabParElem = 1; saveDraft(); renderElems(); refreshLive(); }
+  if (e.target.closest("[data-delel]")) { R.elements = R.elements.filter(x => x !== g); saveDraft(); renderElems(); refreshLive(); }
+});
+$("#addElem").onclick = () => {
+  R.elements.push({ id: uid(), typeId: REF.elements[0]?.id || "", nb: 1, etag: num(REF.params.etag) || 5, segment: "pack", cabParElem: 0, virt: 0 });
+  saveDraft(); renderElems(); refreshLive();
+};
+
+function renderMobs() {
+  const opts = id => REF.mobiliers.map(m => `<option value="${m.id}" ${m.id === id ? "selected" : ""}>${esc(m.nom)} (${m.cm} cm)</option>`).join("");
+  $("#mobList").innerHTML = R.mobiliers.map(m => `
+    <div class="card" data-mob="${m.id}">
+      <div class="row-head">
+        <select data-mf="mobId" aria-label="Mobilier" style="flex:1;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px;min-height:44px">${opts(m.mobId)}</select>
+        <button class="icon-btn" data-delmob aria-label="Supprimer ce mobilier">✕</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        ${stepperHTML(m.nb, `mob:${m.id}:nb`, true)}
+        <div class="seg" role="group" aria-label="Segment">
+          <button type="button" data-mseg="pack" aria-pressed="${m.segment !== "cab"}">Packs</button>
+          <button type="button" data-mseg="cab" aria-pressed="${m.segment === "cab"}">Cave à bière</button>
+        </div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="checkbox" data-mabi ${m.abi ? "checked" : ""}> AB InBev</label>
+      </div>
+      ${m.abi ? `<p class="hint" style="margin:8px 0 0">Compté dans le LD AB InBev : ne saisissez pas les facings de ce mobilier.</p>` : ""}
+    </div>`).join("");
+}
+$("#mobList").addEventListener("change", e => {
+  const card = e.target.closest("[data-mob]"); if (!card) return;
+  const m = R.mobiliers.find(x => x.id === card.dataset.mob);
+  if (e.target.dataset.mf) { m.mobId = e.target.value; m.abi = !!REF.mobiliers.find(x => x.id === m.mobId)?.abi; renderMobs(); }
+  if (e.target.matches("[data-mabi]")) { m.abi = e.target.checked; renderMobs(); }
+  saveDraft(); refreshLive();
+});
+$("#mobList").addEventListener("click", e => {
+  const card = e.target.closest("[data-mob]"); if (!card) return;
+  const m = R.mobiliers.find(x => x.id === card.dataset.mob);
+  const sb = e.target.closest("[data-mseg]");
+  if (sb) { m.segment = sb.dataset.mseg; saveDraft(); renderMobs(); refreshLive(); }
+  if (e.target.closest("[data-delmob]")) { R.mobiliers = R.mobiliers.filter(x => x !== m); saveDraft(); renderMobs(); refreshLive(); }
+});
+$("#addMob").onclick = () => {
+  const first = REF.mobiliers[0]; if (!first) { toast("Ajoutez d'abord un mobilier dans le référentiel"); return; }
+  R.mobiliers.push({ id: uid(), mobId: first.id, nb: 1, segment: "pack", abi: !!first.abi });
+  saveDraft(); renderMobs(); refreshLive();
+};
+$("#magasin").addEventListener("input", e => { R.magasin = e.target.value; $("#storeLabel").textContent = R.magasin || "Nouveau relevé"; saveDraft(); });
+$("#date").addEventListener("input", e => { R.date = e.target.value; saveDraft(); });
+
+/* ------------------------------------------------------------------ */
+/* Vue Facings                                                         */
+/* ------------------------------------------------------------------ */
+const FILTERS = [["tout","Tout"],["abi","AB InBev"],["conc","Concurrence"],["pack","Packs"],["cab","Cave à bière"],["saisis","Déjà saisis"]];
+function renderChips() {
+  $("#fChips").innerHTML = FILTERS.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fFilter === k}">${l}</button>`).join("");
+}
+$("#fChips").onclick = e => { const b = e.target.closest("[data-f]"); if (!b) return; fFilter = b.dataset.f; renderFacings(); };
+$("#fSearch").addEventListener("input", e => { fQuery = e.target.value.toLowerCase(); renderFacings(); });
+
+function renderFacings() {
+  renderChips();
+  const q = fQuery.trim();
+  const list = allProducts().filter(p => {
+    if (fFilter === "abi" && !p.abi) return false;
+    if (fFilter === "conc" && p.abi) return false;
+    if (fFilter === "pack" && p.segment !== "pack") return false;
+    if (fFilter === "cab" && p.segment !== "cab") return false;
+    if (fFilter === "saisis" && !R.facings[p.id]) return false;
+    if (q && !`${p.marque} ${p.nom} ${p.format}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const groups = {};
+  list.forEach(p => (groups[p.marque || "Sans marque"] ||= []).push(p));
+  const names = Object.keys(groups).sort((a, b) => {
+    const A = groups[a][0].abi, B = groups[b][0].abi;
+    return A === B ? a.localeCompare(b, "fr") : A ? -1 : 1;
+  });
+  $("#fList").innerHTML = names.map(m => `
+    <div class="brand-group">
+      <div class="brand-title"><span>${esc(m)} ${groups[m][0].abi ? `<span class="pill abi">AB InBev</span>` : ""}</span><span class="sum" data-bsum="${esc(m)}"></span></div>
+      ${groups[m].map(p => `
+        <div class="prod ${R.facings[p.id] ? "has" : ""}" data-pid="${p.id}">
+          <div class="info">
+            <div class="name">${esc(p.format)}</div>
+            <div class="meta">${esc(p.nom)} · ${num(p.largeur).toLocaleString("fr-FR")} cm ${p.segment === "cab" ? "" : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${p.local ? `<span class="pill">Ajouté sur ce relevé</span>` : ""}</div>
+          </div>
+          ${stepperHTML(R.facings[p.id], "f:" + p.id)}
+        </div>`).join("")}
+    </div>`).join("") || `<div class="empty">Aucun produit ne correspond. Changez le filtre ou ajoutez le produit.</div>`;
+  names.forEach(updateBrandSum);
+}
+function updateBrandSum(m) {
+  const el = document.querySelector(`[data-bsum="${CSS.escape(m)}"]`); if (!el) return;
+  const cm = allProducts().filter(p => (p.marque || "Sans marque") === m).reduce((s, p) => s + num(R.facings[p.id]) * num(p.largeur), 0);
+  el.textContent = cm ? fmtCm(cm) : "";
+}
+function updateFacingRow(pid) {
+  const row = document.querySelector(`.prod[data-pid="${pid}"]`); if (row) row.classList.toggle("has", !!R.facings[pid]);
+  const p = allProducts().find(x => x.id === pid); if (p) updateBrandSum(p.marque || "Sans marque");
+}
+$("#addLocalProd").onclick = () => productForm(null, true);
+
+/* ------------------------------------------------------------------ */
+/* Résultat                                                            */
+/* ------------------------------------------------------------------ */
+const ABI_COLORS = ["#E3A21A","#C7850B","#F2C766","#9A6A06","#F5D98E","#B8791A"];
+const COMP_COLORS = ["#7D8187","#A3A7AC","#5F6368","#C2C5C9","#8E9398","#6F7378"];
+function refreshLive() {
+  const c = compute();
+  $("#liveP").textContent = fmtPct(c.pdl);
+  $("#liveD").textContent = fmtCm(c.dgp);
+  $("#liveL").textContent = fmtCm(c.ld);
+  if ($("#v-resultat").classList.contains("on")) renderResult();
+}
+function renderResult() {
+  const c = compute();
+  if (!c.dgp) { $("#resBody").innerHTML = `<div class="empty">Renseignez les éléments du rayon pour obtenir le DGP.</div>`; return; }
+  let ai = 0, ci = 0;
+  const brands = Object.entries(c.parMarque).sort((a, b) => (b[1].abi - a[1].abi) || (b[1].cm - a[1].cm))
+    .map(([n, v]) => ({ n, ...v, col: v.abi ? ABI_COLORS[ai++ % ABI_COLORS.length] : COMP_COLORS[ci++ % COMP_COLORS.length] }));
+  const reste = Math.max(0, c.dgp - c.releve);
+  const over = c.releve - c.dgp > 1;
+  $("#resBody").innerHTML = `
+    ${over ? `<div class="warn">Les facings saisis dépassent le DGP de ${fmtCm(c.releve - c.dgp)}. Vérifiez le nombre d'étagères ou les largeurs produits.</div>` : ""}
+    <div class="kpis">
+      <div class="kpi hero"><div class="n">${fmtPct(c.pdl)}</div><div class="t">Part de linéaire AB InBev · ${esc(R.magasin || "magasin non renseigné")}</div></div>
+      <div class="kpi"><div class="n">${fmtPct(c.pdlPack)}</div><div class="t">PDL packs</div></div>
+      <div class="kpi"><div class="n">${c.dgpCab ? fmtPct(c.pdlCab) : "–"}</div><div class="t">PDL cave à bière</div></div>
+      <div class="kpi"><div class="n">${c.nbElem}</div><div class="t">Éléments (équiv. ${REF.params.elemRef} cm : ${c.elemEq.toLocaleString("fr-FR",{maximumFractionDigits:2})})</div></div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Le rayon vu de face</h3>
+      <div class="shelf">
+        <div class="shelf-track" role="img" aria-label="Répartition du linéaire par marque">
+          ${brands.map(b => `<div style="flex:0 0 ${Math.min(100, b.cm / c.dgp * 100)}%;background:${b.col}" title="${esc(b.n)}"></div>`).join("")}
+        </div>
+        <div class="shelf-foot"><span>0</span><span>${fmtCm(c.dgp)}</span></div>
+      </div>
+      <div class="legend">
+        ${brands.map(b => `<div class="li"><span class="sw" style="background:${b.col}"></span><span>${esc(b.n)}</span><span class="m">${fmtCm(b.cm)}</span><span class="v">${fmtPct(b.cm / c.dgp)}</span></div>`).join("")}
+        ${reste > 1 ? `<div class="li"><span class="sw" style="background:repeating-linear-gradient(135deg,var(--bg) 0 3px,var(--line) 3px 5px);border:1px solid var(--line)"></span><span style="color:var(--muted)">Non relevé</span><span class="m">${fmtCm(reste)}</span><span class="v">${fmtPct(reste / c.dgp)}</span></div>` : ""}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Détail du calcul</h3>
+      <table class="table">
+        <tr><td>DGP packs (étagères, tablettes virtuelles, sol, mobilier)</td><td>${fmtCm(c.dgpPack)}</td></tr>
+        <tr><td>DGP cave à bière</td><td>${fmtCm(c.dgpCab)}</td></tr>
+        <tr><td>dont demi-palettes</td><td>${fmtCm(c.dpCm)}</td></tr>
+        <tr><td>dont palettes</td><td>${fmtCm(c.palCm)}</td></tr>
+        <tr><td>LD AB InBev packs</td><td>${fmtCm(c.ldPack)}</td></tr>
+        <tr><td>LD AB InBev cave à bière</td><td>${fmtCm(c.ldCab)}</td></tr>
+        <tr><td><b>PDL = LD / DGP</b></td><td>${fmtCm(c.ld)} / ${fmtCm(c.dgp)}</td></tr>
+      </table>
+      <div class="sellfi">
+        <div><div style="font-size:13px;color:var(--muted)">À saisir dans SellFi : DGP rayon bière</div><b>${Math.round(c.dgp)} cm</b></div>
+        <button class="btn small" id="copyDgp">Copier</button>
+      </div>
+    </div>`;
+  $("#copyDgp").onclick = async () => { try { await navigator.clipboard.writeText(String(Math.round(c.dgp))); toast("DGP copié"); } catch { toast("Copie impossible sur cet appareil"); } };
+}
+
+/* Historique */
+async function persistHist() {
+  LS.set("pdl.hist", HIST);
+}
+function renderHist() {
+  $("#histList").innerHTML = HIST.length ? HIST.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "")).map(h => `
+    <div class="list-item" data-h="${h.id}">
+      <div class="grow"><div style="font-weight:600">${esc(h.magasin || "Sans nom")}</div><div class="meta" style="font-size:13px;color:var(--muted)">${esc(h.date)} · DGP ${fmtCm(h.res.dgp)}</div></div>
+      <div style="font:700 22px var(--cond)">${fmtPct(h.res.pdl)}</div>
+      <button class="btn small" data-hopen>Ouvrir</button>
+      <button class="icon-btn" data-hdel aria-label="Supprimer">✕</button>
+    </div>`).join("") : `<div class="empty">Vos relevés enregistrés apparaîtront ici.</div>`;
+}
+$("#histList").addEventListener("click", async e => {
+  const it = e.target.closest("[data-h]"); if (!it) return;
+  const h = HIST.find(x => x.id === it.dataset.h);
+  if (e.target.closest("[data-hopen]")) { R = structuredClone(h.releve); saveDraft(); renderRayon(); show("resultat"); toast("Relevé ouvert"); }
+  if (e.target.closest("[data-hdel]")) {
+    if (!confirm(`Supprimer le relevé ${h.magasin || ""} du ${h.date} ?`)) return;
+    HIST = HIST.filter(x => x !== h); persistHist(); renderHist();
+  }
+});
+$("#saveReleve").onclick = async () => {
+  const c = compute();
+  if (!c.dgp) { toast("Renseignez d'abord le rayon"); return; }
+  const entry = { id: R.id, magasin: R.magasin, date: R.date, res: { dgp: c.dgp, ld: c.ld, pdl: c.pdl, pdlPack: c.pdlPack, pdlCab: c.pdlCab }, releve: structuredClone(R) };
+  HIST = HIST.filter(h => h.id !== R.id).concat(entry); persistHist(); renderHist();
+  toast("Relevé enregistré");
+};
+$("#newReleve").onclick = () => {
+  if (!confirm("Commencer un nouveau relevé ? Le relevé en cours reste disponible s'il a été enregistré.")) return;
+  R = newReleve(); saveDraft(); renderRayon(); show("rayon");
+};
+
+/* ------------------------------------------------------------------ */
+/* Référentiel                                                         */
+/* ------------------------------------------------------------------ */
+$("#refTabs").onclick = e => { const b = e.target.closest("[data-rt]"); if (!b) return; refTab = b.dataset.rt; renderRef(); };
+function renderRef() {
+  document.querySelectorAll("#refTabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.rt === refTab));
+  $("#refMode").textContent = canEditRef
+    ? (artifactApi ? "Modifiez le référentiel puis publiez-le : tous les M1 reçoivent la nouvelle version à leur prochaine ouverture du lien." : "Modifiez le référentiel, puis téléchargez la page à jour et remplacez le fichier hébergé.")
+    : "Consultation seule : le référentiel est géré par l'administrateur.";
+  const ro = canEditRef ? "" : "disabled";
+  renderPublishBar();
+  const body = $("#refBody");
+  if (refTab === "produits") {
+    const q = (renderRef.q || "").toLowerCase();
+    const list = REF.produits.filter(p => !q || `${p.marque} ${p.nom} ${p.format}`.toLowerCase().includes(q))
+      .sort((a, b) => (b.abi - a.abi) || a.marque.localeCompare(b.marque, "fr") || a.format.localeCompare(b.format, "fr"));
+    body.innerHTML = `
+      ${REF.exemple ? `<div class="warn">Les largeurs affichées sont des exemples. Remplacez-les par les dimensions réelles de chaque produit.</div>` : ""}
+      ${canEditRef ? `<div class="btn-row" style="margin-bottom:12px"><button class="btn amber" id="addProd" style="flex:1">+ Nouveau produit</button><button class="btn" id="pasteProd">Coller depuis Excel</button></div>` : ""}
+      <input class="search" id="refSearch" type="search" placeholder="Chercher un produit" value="${esc(renderRef.q || "")}" style="margin-bottom:10px">
+      <div class="card" style="padding:4px 14px">
+        ${list.map(p => `
+          <div class="list-item" data-rp="${p.id}">
+            <div class="grow">
+              <div style="font-weight:600">${esc(p.marque)} ${esc(p.nom)}</div>
+              <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""}</div>
+            </div>
+            <input class="inline" inputmode="decimal" value="${num(p.largeur)}" data-pw aria-label="Largeur en cm" ${ro}><span class="unit" style="font-size:13px;color:var(--muted)">cm</span>
+            ${canEditRef ? `<button class="icon-btn" data-pedit aria-label="Modifier">✎</button>` : ""}
+          </div>`).join("") || `<div class="empty" style="margin:10px 0">Aucun produit.</div>`}
+      </div>
+      <p class="hint">${REF.produits.length} produits · largeur = encombrement d'un facing en façade, en cm.</p>`;
+    $("#refSearch").oninput = e => { renderRef.q = e.target.value; const pos = e.target.selectionStart; renderRef(); const s = $("#refSearch"); s.focus(); s.setSelectionRange(pos, pos); };
+    if (canEditRef) { $("#addProd").onclick = () => productForm(null); $("#pasteProd").onclick = pasteForm; }
+  }
+  if (refTab === "elements") {
+    body.innerHTML = `
+      <p class="hint">Types d'éléments proposés dans le relevé, avec leur largeur réelle.</p>
+      <div class="card" style="padding:4px 14px">
+        ${REF.elements.map(e => `<div class="list-item" data-re="${e.id}">
+          <input class="inline txt" value="${esc(e.nom)}" data-ef="nom" aria-label="Nom" ${ro}>
+          <input class="inline" inputmode="decimal" value="${e.largeur}" data-ef="largeur" aria-label="Largeur en cm" ${ro}><span style="font-size:13px;color:var(--muted)">cm</span>
+          ${canEditRef ? `<button class="icon-btn" data-edel aria-label="Supprimer">✕</button>` : ""}</div>`).join("")}
+      </div>
+      ${canEditRef ? `<button class="btn amber" id="addEl" style="width:100%">+ Nouveau type d'élément</button>` : ""}`;
+    if (canEditRef) $("#addEl").onclick = () => { REF.elements.push({ id: uid(), nom: "Nouvel élément", largeur: 133 }); saveRef(); renderRef(); };
+  }
+  if (refTab === "mobiliers") {
+    body.innerHTML = `
+      <p class="hint">Cochez AB InBev pour que le mobilier compte aussi dans le LD.</p>
+      <div class="card" style="padding:4px 14px">
+        ${REF.mobiliers.map(m => `<div class="list-item" data-rm="${m.id}">
+          <input class="inline txt" value="${esc(m.nom)}" data-mf2="nom" aria-label="Nom" ${ro}>
+          <input class="inline" inputmode="decimal" value="${m.cm}" data-mf2="cm" aria-label="Dimension en cm" ${ro}><span style="font-size:13px;color:var(--muted)">cm</span>
+          <label style="display:flex;gap:4px;align-items:center;font-size:13px"><input type="checkbox" data-mf2="abi" ${m.abi ? "checked" : ""} ${ro}>ABI</label>
+          ${canEditRef ? `<button class="icon-btn" data-mdel aria-label="Supprimer">✕</button>` : ""}</div>`).join("")}
+      </div>
+      ${canEditRef ? `<button class="btn amber" id="addM" style="width:100%">+ Nouveau mobilier</button>` : ""}`;
+    if (canEditRef) $("#addM").onclick = () => { REF.mobiliers.push({ id: uid(), nom: "Nouveau mobilier", cm: 100, abi: false }); saveRef(); renderRef(); };
+  }
+  if (refTab === "params") {
+    const P = REF.params;
+    body.innerHTML = `
+      <div class="card grid2">
+        <div class="field"><label>Demi-palette (cm)</label><input inputmode="decimal" data-pp="dp" value="${P.dp}" ${ro}></div>
+        <div class="field"><label>Palette (cm)</label><input inputmode="decimal" data-pp="pal" value="${P.pal}" ${ro}></div>
+        <div class="field"><label>Élément de référence (cm)</label><input inputmode="decimal" data-pp="elemRef" value="${P.elemRef}" ${ro}></div>
+        <div class="field"><label>Étagères par défaut</label><input inputmode="numeric" data-pp="etag" value="${P.etag}" ${ro}></div>
+      </div>
+      <h2>Rappel des règles</h2>
+      <details class="rule"><summary>Ce qui entre dans le DGP</summary><p>Tout l'univers bière permanent : packs, canettes, fûts, cave à bière et hard seltzer, même s'ils sont séparés en magasin, ainsi que toutes les tablettes, y compris celles au-dessus de 180 cm. Sont exclus : rayons bio, régionaux et produits du monde, snacking, derrière de caisse, zone promo, verres, tireuses et kits de brassage.</p></details>
+      <details class="rule"><summary>Mobilier</summary><p>Hors univers bière permanent : on ne compte pas. Mobilier magasin dans l'univers : on compte. Mobilier fournisseur : on compte seulement s'il est intégré physiquement au rack bière (hors TG).</p></details>
+      <details class="rule"><summary>Tablette virtuelle</summary><p>Sur une configuration étagère, une hauteur de gerbage d'au moins 4 packs 12x25cl, 3 packs 12x33cl ou 5 packs canettes 12x33cl compte comme une tablette virtuelle, pour toutes les marques. Des produits posés au sol sans support comptent aussi comme une tablette. Canettes sur support avec 4 hauteurs : une tablette virtuelle.</p></details>
+      <details class="rule"><summary>Demi-palettes et palettes</summary><p>Une demi-palette exige un support au sol et 4 hauteurs de gerbage (pack référent : Leffe 12x25cl). Elle compte 180 cm, une palette 360 cm. Une demi-palette posée dans le mauvais sens compte pour deux.</p></details>
+      <details class="rule"><summary>Cave à bière</summary><p>Le DGP CAB regroupe les tablettes du segment cave à bière et le Corner Bosteels s'il est compté. Les bouteilles unitaires implantées ailleurs restent hors CAB. Les packs isolés dans le segment CAB restent en CAB. Élément mixte : chaque étagère rejoint son DGP.</p></details>
+      <details class="rule"><summary>Nombre d'éléments</summary><p>Éléments de 1,33 m + (éléments hors dimension × leur taille) / 1,33 m, arrondi à l'entier le plus proche. Les éléments uniquement promo ne comptent pas.</p></details>
+      ${canEditRef ? `<div class="btn-row" style="margin-top:16px"><button class="btn danger" id="resetRef">Revenir au référentiel d'exemple</button></div>` : ""}`;
+    if (canEditRef) $("#resetRef").onclick = () => { if (confirm("Remplacer tout le référentiel par les exemples ?")) { REF = { ...structuredClone(DEFAULT_REF), rev: PUBLISHED.rev || 0 }; saveRef(); renderRef(); refreshLive(); } };
+  }
+}
+$("#refBody").addEventListener("change", e => {
+  if (!canEditRef) return;
+  const t = e.target;
+  const rp = t.closest("[data-rp]"); if (rp && t.matches("[data-pw]")) { REF.produits.find(p => p.id === rp.dataset.rp).largeur = num(t.value); REF.exemple = false; }
+  const re = t.closest("[data-re]"); if (re && t.dataset.ef) { const el = REF.elements.find(x => x.id === re.dataset.re); el[t.dataset.ef] = t.dataset.ef === "nom" ? t.value : num(t.value); }
+  const rm = t.closest("[data-rm]"); if (rm && t.dataset.mf2) { const m = REF.mobiliers.find(x => x.id === rm.dataset.rm); const f = t.dataset.mf2; m[f] = f === "abi" ? t.checked : f === "cm" ? num(t.value) : t.value; }
+  if (t.dataset.pp) REF.params[t.dataset.pp] = num(t.value);
+  saveRef(); refreshLive(); renderSolPills();
+});
+$("#refBody").addEventListener("click", e => {
+  if (!canEditRef) return;
+  const rp = e.target.closest("[data-rp]");
+  if (rp && e.target.closest("[data-pedit]")) productForm(REF.produits.find(p => p.id === rp.dataset.rp));
+  const re = e.target.closest("[data-re]");
+  if (re && e.target.closest("[data-edel]")) {
+    if (REF.elements.length === 1) { toast("Gardez au moins un type d'élément"); return; }
+    REF.elements = REF.elements.filter(x => x.id !== re.dataset.re); saveRef(); renderRef(); renderElems(); refreshLive();
+  }
+  const rm = e.target.closest("[data-rm]");
+  if (rm && e.target.closest("[data-mdel]")) { REF.mobiliers = REF.mobiliers.filter(x => x.id !== rm.dataset.rm); saveRef(); renderRef(); renderMobs(); refreshLive(); }
+});
+
+/* Formulaire produit (référentiel ou produit local au relevé) */
+function productForm(p, local = false) {
+  const editing = !!p;
+  p = p || { marque: "", nom: "", format: "", largeur: "", segment: "pack", abi: false };
+  const marques = [...new Set(REF.produits.map(x => x.marque))].sort((a, b) => a.localeCompare(b, "fr"));
+  const formats = [...new Set(REF.produits.map(x => x.format))].sort((a, b) => a.localeCompare(b, "fr"));
+  $("#dlgBody").innerHTML = `
+    <h3 style="font-size:24px">${editing ? "Modifier le produit" : local ? "Produit pour ce relevé" : "Nouveau produit"}</h3>
+    ${local && !canEditRef ? `<p class="hint">Ce produit n'existe que dans ce relevé. Signalez-le à l'administrateur pour l'ajouter au référentiel.</p>` : ""}
+    <div class="grid2">
+      <div class="field"><label for="pMarque">Marque</label><input id="pMarque" list="dlMarques" value="${esc(p.marque)}" placeholder="Leffe"></div>
+      <div class="field"><label for="pNom">Produit</label><input id="pNom" value="${esc(p.nom)}" placeholder="Blonde"></div>
+      <div class="field"><label for="pFormat">Format</label><input id="pFormat" list="dlFormats" value="${esc(p.format)}" placeholder="Pack 12x25cl"></div>
+      <div class="field"><label for="pLarg">Largeur d'un facing (cm)</label><input id="pLarg" inputmode="decimal" value="${p.largeur}" placeholder="26"></div>
+    </div>
+    <datalist id="dlMarques">${marques.map(m => `<option value="${esc(m)}">`).join("")}</datalist>
+    <datalist id="dlFormats">${formats.map(m => `<option value="${esc(m)}">`).join("")}</datalist>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="seg" role="group" aria-label="Segment" id="pSeg">
+        <button type="button" data-v="pack" aria-pressed="${p.segment !== "cab"}">Packs, canettes, fûts</button>
+        <button type="button" data-v="cab" aria-pressed="${p.segment === "cab"}">Cave à bière</button>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pAbi" ${p.abi ? "checked" : ""}> Marque AB InBev</label>
+    </div>
+    <p class="hint" id="pErr" style="color:var(--danger);margin:0"></p>
+    <div class="btn-row">
+      <button class="btn primary" id="pSave" style="flex:1">${editing ? "Enregistrer" : "Ajouter"}</button>
+      ${editing ? `<button class="btn" id="pDup">Dupliquer</button><button class="btn danger" id="pDel">Supprimer</button>` : ""}
+      <button class="btn ghost" id="pCancel">Annuler</button>
+    </div>`;
+  let seg = p.segment || "pack";
+  $("#pSeg").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; seg = b.dataset.v; $("#pSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  const read = () => ({ marque: $("#pMarque").value.trim(), nom: $("#pNom").value.trim(), format: $("#pFormat").value.trim(), largeur: num($("#pLarg").value), segment: seg, abi: $("#pAbi").checked });
+  $("#pMarque").addEventListener("change", () => { const ex = REF.produits.find(x => x.marque.toLowerCase() === $("#pMarque").value.trim().toLowerCase()); if (ex) $("#pAbi").checked = ex.abi; });
+  $("#pFormat").addEventListener("change", () => { const ex = REF.produits.find(x => x.format === $("#pFormat").value.trim()); if (ex && !$("#pLarg").value) $("#pLarg").value = ex.largeur; });
+  $("#pSave").onclick = () => {
+    const v = read();
+    if (!v.marque || !v.format || !v.largeur) { $("#pErr").textContent = "Renseignez au moins la marque, le format et une largeur supérieure à 0."; return; }
+    if (editing) Object.assign(p, v);
+    else if (local && !canEditRef) R.locaux.push({ id: uid(), ...v });
+    else REF.produits.push({ id: uid(), ...v });
+    if (local && !canEditRef) saveDraft(); else saveRef();
+    $("#dlg").close(); renderRef(); renderFacings(); refreshLive();
+    toast(editing ? "Produit enregistré" : "Produit ajouté");
+  };
+  if (editing) {
+    $("#pDup").onclick = () => { const v = read(); const copy = { id: uid(), ...v, format: v.format + " (copie)" }; REF.produits.push(copy); saveRef(); productForm(copy); renderRef(); };
+    $("#pDel").onclick = () => { if (!confirm(`Supprimer ${p.marque} ${p.nom} ${p.format} ?`)) return; REF.produits = REF.produits.filter(x => x !== p); delete R.facings[p.id]; saveRef(); saveDraft(); $("#dlg").close(); renderRef(); refreshLive(); };
+  }
+  $("#pCancel").onclick = () => $("#dlg").close();
+  $("#dlg").showModal();
+}
+
+/* Import en masse depuis Excel */
+function pasteForm() {
+  $("#dlgBody").innerHTML = `
+    <h3 style="font-size:24px">Coller depuis Excel</h3>
+    <p class="hint" style="margin:0">Copiez les colonnes dans cet ordre : Marque, Produit, Format, Largeur (cm), Segment (Pack ou CAB), AB InBev (Oui ou Non). Un produit déjà présent (même marque, produit et format) voit sa largeur mise à jour.</p>
+    <textarea id="pasteTxt" placeholder="Leffe&#9;Blonde&#9;Pack 12x25cl&#9;26&#9;Pack&#9;Oui"></textarea>
+    <p class="hint" id="pasteInfo" style="margin:0"></p>
+    <div class="btn-row"><button class="btn primary" id="pasteGo" style="flex:1">Importer</button><button class="btn ghost" id="pasteCancel">Annuler</button></div>`;
+  const parse = () => $("#pasteTxt").value.split(/\r?\n/).map(l => l.split(/\t|;/).map(s => s.trim())).filter(c => c.length >= 4 && c[0] && num(c[3]) > 0);
+  $("#pasteTxt").oninput = () => { $("#pasteInfo").textContent = `${parse().length} ligne(s) valide(s) détectée(s)`; };
+  $("#pasteGo").onclick = () => {
+    const rows = parse(); if (!rows.length) { $("#pasteInfo").textContent = "Aucune ligne valide : vérifiez l'ordre des colonnes et la largeur."; return; }
+    let add = 0, upd = 0;
+    rows.forEach(([marque, nom = "", format = "", larg, seg = "pack", abi = ""]) => {
+      const v = { marque, nom, format, largeur: num(larg), segment: /cab|cave/i.test(seg) ? "cab" : "pack", abi: /^(o|oui|y|yes|x|1|vrai|true)/i.test(abi) };
+      const ex = REF.produits.find(p => p.marque.toLowerCase() === marque.toLowerCase() && p.nom.toLowerCase() === nom.toLowerCase() && p.format.toLowerCase() === format.toLowerCase());
+      if (ex) { Object.assign(ex, v); upd++; } else { REF.produits.push({ id: uid(), ...v }); add++; }
+    });
+    REF.exemple = false; saveRef(); $("#dlg").close(); renderRef(); refreshLive();
+    toast(`${add} ajouté(s), ${upd} mis à jour`);
+  };
+  $("#pasteCancel").onclick = () => $("#dlg").close();
+  $("#dlg").showModal();
+}
+$("#dlg").addEventListener("click", e => { if (e.target === $("#dlg")) $("#dlg").close(); });
+
+/* ------------------------------------------------------------------ */
+/* Démarrage + base partagée                                           */
+/* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Publication du référentiel (auteur uniquement)                      */
+/* ------------------------------------------------------------------ */
+function renderPublishBar() {
+  const bar = $("#pubBar"); if (!bar) return;
+  if (!canEditRef || !refDirty) { bar.hidden = true; return; }
+  bar.hidden = false;
+  $("#pubGo").textContent = artifactApi ? "Publier pour tous les M1" : "Télécharger la page à jour";
+  $("#pubMsg").textContent = artifactApi
+    ? "Vos modifications ne sont visibles que par vous tant qu'elles ne sont pas publiées."
+    : "Téléchargez la page à jour puis remplacez le fichier hébergé : les M1 verront le nouveau référentiel.";
+}
+function buildDocument(ref) {
+  const json = JSON.stringify(ref).replace(/</g, "\\u003c");
+  const css = document.getElementById("css").textContent;
+  const markup = document.getElementById("markup").innerHTML;
+  const app = document.getElementById("app").textContent;
+  const S = "scr" + "ipt";
+  return `<!DOCTYPE html>\n<html lang="fr">\n<head>\n${HEAD_TAGS}\n<style id="css">${css}</style>\n</head>\n<body>\n<template id="markup">${markup}</template>\n<${S} id="ref-data" type="application/json">${json}</${S}>\n<${S} id="app">${app}</${S}>\n</body>\n</html>\n`;
+}
+function downloadPage() {
+  const next = { ...JSON.parse(JSON.stringify(REF)), rev: (PUBLISHED.rev || 0) + 1 };
+  const blob = new Blob([buildDocument(next)], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "index.html";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Page téléchargée : remplacez le fichier hébergé");
+}
+async function publishRef() {
+  if (!artifactApi) { downloadPage(); return; }
+  const btn = $("#pubGo"); btn.disabled = true; btn.textContent = "Publication…";
+  const next = { ...JSON.parse(JSON.stringify(REF)), rev: (PUBLISHED.rev || 0) + 1 };
+  try {
+    await artifactApi.publish(buildDocument(next));
+    LS.set("pdl.refDraft", null); refDirty = false;
+    toast("Référentiel publié");
+  } catch (e) {
+    const code = e && e.code;
+    if (code === "not_granted" || code === "not_writer") {
+      canEditRef = false; REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null);
+      renderRef(); refreshLive(); toast("Seul l'auteur de l'application peut publier le référentiel");
+    } else if (code === "conflict") {
+      toast("Une autre version vient d'être publiée, la page se recharge");
+    } else {
+      toast("Publication impossible, réessayez");
+    }
+  } finally { btn.disabled = false; renderPublishBar(); }
+}
+document.addEventListener("click", e => {
+  if (e.target.closest("#pubGo")) publishRef();
+  if (e.target.closest("#pubUndo")) {
+    if (!confirm("Annuler toutes les modifications non publiées ?")) return;
+    REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null);
+    setSync("Référentiel à jour"); renderRef(); renderElems(); renderMobs(); refreshLive();
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Démarrage                                                           */
+/* ------------------------------------------------------------------ */
+function applyDraftIfAny() {
+  const d = LS.get("pdl.refDraft", null);
+  if (d && d.ref && (d.baseRev || 0) === (PUBLISHED.rev || 0)) { REF = d.ref; refDirty = true; }
+}
+if (!window.claude || !window.claude.use) {
+  // Page hébergée hors claude.ai : référentiel en lecture seule, sauf en ajoutant ?admin à l'adresse
+  canEditRef = new URLSearchParams(location.search).has("admin");
+  if (canEditRef) applyDraftIfAny();
+  setSync(canEditRef ? (refDirty ? "Modifications non téléchargées" : "Mode administrateur") : "Référentiel à jour");
+} else {
+  setSync("Référentiel à jour");
+}
+renderRayon();
+
+(async function connect() {
+  if (!window.claude || !window.claude.use) return;
+  try {
+    const art = await window.claude.use("artifact");
+    if (!art) return;
+    artifactApi = art; canEditRef = true; applyDraftIfAny();
+    setSync(refDirty ? "Modifications non publiées" : "Référentiel à jour");
+    renderElems(); renderMobs(); refreshLive(); renderPublishBar();
+    if ($("#v-ref").classList.contains("on")) renderRef();
+  } catch { /* lecture seule */ }
+})();
+
+</script>
+</body>
+</html>
