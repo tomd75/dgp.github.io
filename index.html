@@ -43,8 +43,8 @@ button{cursor:pointer}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding:12px 16px 10px;border-bottom:1px solid var(--line)}
 .top-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;max-width:760px;margin:0 auto}
 .brand{font:700 22px/1 var(--cond);letter-spacing:.2px}
-.brand small{font:500 14px var(--sans);color:var(--muted);margin-left:6px}
-.sync{font-size:13px;color:var(--muted)}
+.brand small{display:block;font:500 14px var(--sans);color:var(--muted);margin-top:4px}
+.sync{font-size:13px;color:var(--muted);text-align:right;max-width:45%}
 
 main{max-width:760px;margin:0 auto;padding:16px 16px 190px}
 .view{display:none}
@@ -98,7 +98,11 @@ p.hint{margin:0 0 12px;color:var(--muted);font-size:14px}
 .brand-group{margin-bottom:14px}
 .brand-title{display:flex;align-items:baseline;justify-content:space-between;font:600 18px var(--cond);padding:4px 2px 6px}
 .brand-title span.sum{font:500 14px var(--sans);color:var(--muted)}
-.prod{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
+.prod-main{display:flex;align-items:center;gap:10px}
+.sol-open{border:none;background:transparent;color:var(--amber-deep);font-size:13px;font-weight:600;padding:6px 0 0;min-height:32px;text-align:left}
+.sol-row{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.sol-f{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.prod{display:block;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
 .prod.has{border-color:var(--amber)}
 .prod .info{flex:1;min-width:0}
 .prod .name{font-weight:600;line-height:1.25}
@@ -191,21 +195,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button class="btn amber" id="addElem" style="width:100%">+ Ajouter des éléments</button>
 
     <h2>Au sol</h2>
-    <p class="hint">Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Une demi-palette posée dans le mauvais sens compte pour deux. Les demi-palettes et palettes AB InBev comptent entières dans le LD : ne saisissez pas leurs facings.</p>
-    <div class="card">
-      <div class="row-head"><h3>Demi-palettes</h3><span class="pill" id="dpCm"></span></div>
-      <div class="grid2">
-        <div class="field"><label>Total</label><div data-bind="dp.total"></div></div>
-        <div class="field"><label>Dont AB InBev</label><div data-bind="dp.abi"></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="row-head"><h3>Palettes</h3><span class="pill" id="palCm"></span></div>
-      <div class="grid2">
-        <div class="field"><label>Total</label><div data-bind="pal.total"></div></div>
-        <div class="field"><label>Dont AB InBev</label><div data-bind="pal.abi"></div></div>
-      </div>
-    </div>
+    <p class="hint">Les demi-palettes et palettes se saisissent produit par produit dans l'onglet Facings. Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Posée dans le mauvais sens, elle compte pour deux.</p>
+    <div class="card" id="solRecap"></div>
 
     <h2>Mobilier</h2>
     <p class="hint">Mobilier fournisseur : on le compte seulement s'il est intégré physiquement au rack bière.</p>
@@ -279,6 +270,15 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <script id="ref-data" type="application/json">null</script>
 <script id="app">
 document.body.prepend(document.getElementById("markup").content.cloneNode(true));
+/* ================================================================
+   RÉGLAGE PRINCIPAL
+   true  : chaque utilisateur peut ajouter ou modifier produits, éléments
+           et mobilier. Ses ajouts restent sur son téléphone.
+   false : le référentiel est verrouillé. Seul l'administrateur le modifie
+           (lien avec ?admin, ou auteur sur claude.ai).
+   ================================================================ */
+const REFERENTIEL_MODIFIABLE_PAR_TOUS = true;
+
 const HEAD_TAGS = "<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>PDL rayon bi\u00e8re</title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap\" rel=\"stylesheet\">";
 /* ------------------------------------------------------------------ */
 /* Données par défaut                                                  */
@@ -326,7 +326,7 @@ const DEFAULT_REF = {
 const newReleve = () => ({
   id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
   elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0 }],
-  dp: { total: 0, abi: 0 }, pal: { total: 0, abi: 0 },
+  dp: {}, pal: {},
   mobiliers: [], facings: {}, locaux: []
 });
 
@@ -341,9 +341,16 @@ const EMBED = (() => { try { return JSON.parse(document.getElementById("ref-data
 const PUBLISHED = EMBED && EMBED.produits ? EMBED : { ...structuredClone(DEFAULT_REF), rev: 0 };
 let REF = structuredClone(PUBLISHED);
 let refDirty = false;
-let R = LS.get("pdl.draft", null) || newReleve();
+let R = migrate(LS.get("pdl.draft", null) || newReleve());
+function migrate(r) {
+  if (!r.dp || "total" in r.dp) r.dp = {};
+  if (!r.pal || "total" in r.pal) r.pal = {};
+  r.locaux = r.locaux || []; r.facings = r.facings || {};
+  return r;
+}
 let HIST = LS.get("pdl.hist", []);
-let canEditRef = false;     // devient vrai pour l'auteur de la page (ou pour un fichier ouvert hors claude.ai)
+let canEditRef = REFERENTIEL_MODIFIABLE_PAR_TOUS;
+let isAdmin = false;        // auteur sur claude.ai, ou lien ?admin hors claude.ai
 let artifactApi = null;
 let refTab = "produits", fFilter = "tout", fQuery = "";
 
@@ -358,9 +365,10 @@ function saveDraft() { LS.set("pdl.draft", R); }
 function saveRef() {
   refDirty = true;
   LS.set("pdl.refDraft", { baseRev: PUBLISHED.rev || 0, ref: REF });
-  setSync(artifactApi ? "Modifications non publiées" : "Modifications non téléchargées");
+  setSync(!isAdmin ? "Référentiel modifié sur cet appareil" : artifactApi ? "Modifications non publiées" : "Modifications non téléchargées");
   renderPublishBar();
 }
+const isPublished = (list, id) => (PUBLISHED[list] || []).some(x => x.id === id);
 function setSync(t) { $("#syncLabel").textContent = t; }
 
 /* ------------------------------------------------------------------ */
@@ -382,10 +390,7 @@ function compute() {
     dgpCab += w * nb * cab + vCab;
     elemEq += w === num(P.elemRef) ? nb : (nb * w) / num(P.elemRef || 133);
   }
-  const dpCm = num(R.dp.total) * num(P.dp), palCm = num(R.pal.total) * num(P.pal);
-  dgpPack += dpCm + palCm;
-  const ldSol = num(R.dp.abi) * num(P.dp) + num(R.pal.abi) * num(P.pal);
-  ldPack += ldSol;
+  let dpCm = 0, palCm = 0, nbDp = 0, nbPal = 0;
   let ldMob = 0;
   for (const m of R.mobiliers) {
     const cat = REF.mobiliers.find(x => x.id === m.mobId); if (!cat) continue;
@@ -397,20 +402,24 @@ function compute() {
   const parMarque = {};
   let relevePack = 0, releveCab = 0;
   for (const p of allProducts()) {
-    const f = num(R.facings[p.id]); if (!f) continue;
-    const cm = f * num(p.largeur);
+    const f = num(R.facings[p.id]), d = num(R.dp[p.id]), pa = num(R.pal[p.id]);
+    if (!f && !d && !pa) continue;
+    const sol = d * num(P.dp) + pa * num(P.pal);
+    dpCm += d * num(P.dp); palCm += pa * num(P.pal); nbDp += d; nbPal += pa;
+    // Les demi-palettes et palettes entrent dans le DGP du segment du produit
+    if (p.segment === "cab") dgpCab += sol; else dgpPack += sol;
+    const cm = f * num(p.largeur) + sol;
     if (p.segment === "cab") releveCab += cm; else relevePack += cm;
     if (p.abi) { if (p.segment === "cab") ldCab += cm; else ldPack += cm; }
     const k = p.marque || "Sans marque";
     parMarque[k] = parMarque[k] || { cm: 0, abi: p.abi, facings: 0 };
     parMarque[k].cm += cm; parMarque[k].facings += f;
   }
-  if (ldSol) { parMarque["Sol AB InBev (DP/palettes)"] = { cm: ldSol, abi: true, facings: 0 }; }
   if (ldMob) { parMarque["Mobilier AB InBev"] = { cm: ldMob, abi: true, facings: 0 }; }
   const dgp = dgpPack + dgpCab, ld = ldPack + ldCab;
-  const releve = relevePack + releveCab + ldSol + ldMob + (dpCm - num(R.dp.abi) * num(P.dp)) + (palCm - num(R.pal.abi) * num(P.pal));
+  const releve = relevePack + releveCab + ldMob;
   return {
-    dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm,
+    dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm, nbDp, nbPal,
     pdl: dgp ? ld / dgp : 0, pdlPack: dgpPack ? ldPack / dgpPack : 0, pdlCab: dgpCab ? ldCab / dgpCab : 0,
     nbElem: Math.round(elemEq + 1e-9), elemEq, parMarque, releve
   };
@@ -432,6 +441,8 @@ function readKey(key) {
   if (scope === "el") return R.elements.find(x => x.id === a)?.[b];
   if (scope === "mob") return R.mobiliers.find(x => x.id === a)?.[b];
   if (scope === "f") return R.facings[a] || 0;
+  if (scope === "dp") return R.dp[a] || 0;
+  if (scope === "pal") return R.pal[a] || 0;
 }
 function writeKey(key, v) {
   v = Math.max(0, v);
@@ -440,6 +451,8 @@ function writeKey(key, v) {
   else if (scope === "el") { const g = R.elements.find(x => x.id === a); if (g) g[b] = v; }
   else if (scope === "mob") { const m = R.mobiliers.find(x => x.id === a); if (m) m[b] = v; }
   else if (scope === "f") { if (v) R.facings[a] = v; else delete R.facings[a]; }
+  else if (scope === "dp") { if (v) R.dp[a] = v; else delete R.dp[a]; }
+  else if (scope === "pal") { if (v) R.pal[a] = v; else delete R.pal[a]; }
   saveDraft(); refreshLive();
 }
 
@@ -449,8 +462,7 @@ document.addEventListener("click", e => {
     const key = st.dataset.key, v = num(readKey(key)) + num(st.dataset.step);
     writeKey(key, v);
     const inp = st.parentElement.querySelector("input"); inp.value = Math.max(0, v);
-    if (key.startsWith("f:")) updateFacingRow(key.slice(2));
-    if (key.startsWith("r:dp") || key.startsWith("r:pal")) renderSolPills();
+    if (/^(f|dp|pal):/.test(key)) updateFacingRow(key.split(":")[1]);
     return;
   }
   const go = e.target.closest("[data-goto]");
@@ -460,8 +472,7 @@ document.addEventListener("input", e => {
   const t = e.target;
   if (t.matches(".stepper input[data-key]")) {
     writeKey(t.dataset.key, num(t.value));
-    if (t.dataset.key.startsWith("f:")) updateFacingRow(t.dataset.key.slice(2));
-    if (t.dataset.key.startsWith("r:dp") || t.dataset.key.startsWith("r:pal")) renderSolPills();
+    if (/^(f|dp|pal):/.test(t.dataset.key)) updateFacingRow(t.dataset.key.split(":")[1]);
   }
 });
 
@@ -486,9 +497,19 @@ function renderRayon() {
   document.querySelectorAll("[data-bind]").forEach(el => { el.innerHTML = stepperHTML(getPath(R, el.dataset.bind), "r:" + el.dataset.bind); });
   renderElems(); renderMobs(); renderSolPills(); refreshLive();
 }
+function hasSol(id) { return !!(R.dp[id] || R.pal[id]); }
 function renderSolPills() {
-  $("#dpCm").textContent = fmtCm(num(R.dp.total) * num(REF.params.dp));
-  $("#palCm").textContent = fmtCm(num(R.pal.total) * num(REF.params.pal));
+  const c = compute();
+  const lignes = allProducts().filter(p => R.dp[p.id] || R.pal[p.id]).map(p => {
+    const parts = [];
+    if (R.dp[p.id]) parts.push(`${R.dp[p.id]} DP`);
+    if (R.pal[p.id]) parts.push(`${R.pal[p.id]} palette${R.pal[p.id] > 1 ? "s" : ""}`);
+    return `<div class="list-item"><div class="grow">${esc(p.marque)} ${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""}</div><span style="font-size:14px">${parts.join(", ")}</span></div>`;
+  }).join("");
+  $("#solRecap").innerHTML = `
+    <div class="row-head" style="margin-bottom:${lignes ? 4 : 0}px"><h3>${c.nbDp} demi-palette${c.nbDp > 1 ? "s" : ""}, ${c.nbPal} palette${c.nbPal > 1 ? "s" : ""}</h3><span class="pill">${fmtCm(c.dpCm + c.palCm)}</span></div>
+    ${lignes || `<p class="hint" style="margin:6px 0 0">Aucune pour l'instant.</p>`}
+    <button class="btn small" data-goto="facings" style="margin-top:10px">Saisir dans Facings</button>`;
 }
 function renderElems() {
   const opts = id => REF.elements.map(e => `<option value="${e.id}" ${e.id === id ? "selected" : ""}>${esc(e.nom)} (${e.largeur} cm)</option>`).join("");
@@ -587,7 +608,7 @@ function renderFacings() {
     if (fFilter === "conc" && p.abi) return false;
     if (fFilter === "pack" && p.segment !== "pack") return false;
     if (fFilter === "cab" && p.segment !== "cab") return false;
-    if (fFilter === "saisis" && !R.facings[p.id]) return false;
+    if (fFilter === "saisis" && !R.facings[p.id] && !hasSol(p.id)) return false;
     if (q && !`${p.marque} ${p.nom} ${p.format}`.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -601,23 +622,39 @@ function renderFacings() {
     <div class="brand-group">
       <div class="brand-title"><span>${esc(m)} ${groups[m][0].abi ? `<span class="pill abi">AB InBev</span>` : ""}</span><span class="sum" data-bsum="${esc(m)}"></span></div>
       ${groups[m].map(p => `
-        <div class="prod ${R.facings[p.id] ? "has" : ""}" data-pid="${p.id}">
-          <div class="info">
-            <div class="name">${esc(p.format)}</div>
-            <div class="meta">${esc(p.nom)} · ${num(p.largeur).toLocaleString("fr-FR")} cm ${p.segment === "cab" ? "" : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${p.local ? `<span class="pill">Ajouté sur ce relevé</span>` : ""}</div>
+        <div class="prod ${R.facings[p.id] || hasSol(p.id) ? "has" : ""}" data-pid="${p.id}">
+          <div class="prod-main">
+            <div class="info">
+              <div class="name">${esc(p.format)}</div>
+              <div class="meta">${esc(p.nom)} · ${num(p.largeur).toLocaleString("fr-FR")} cm ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${p.local ? `<span class="pill">Ajouté sur ce relevé</span>` : ""}</div>
+            </div>
+            ${stepperHTML(R.facings[p.id], "f:" + p.id)}
           </div>
-          ${stepperHTML(R.facings[p.id], "f:" + p.id)}
+          ${hasSol(p.id) || solOpen.has(p.id) ? solHTML(p.id) : `<button type="button" class="sol-open" data-solopen="${p.id}">+ Demi-palette ou palette</button>`}
         </div>`).join("")}
     </div>`).join("") || `<div class="empty">Aucun produit ne correspond. Changez le filtre ou ajoutez le produit.</div>`;
   names.forEach(updateBrandSum);
 }
+const solOpen = new Set();
+function solHTML(id) {
+  return `<div class="sol-row">
+    <div class="sol-f"><span>Demi-palettes</span>${stepperHTML(R.dp[id], "dp:" + id, true)}</div>
+    <div class="sol-f"><span>Palettes</span>${stepperHTML(R.pal[id], "pal:" + id, true)}</div>
+  </div>`;
+}
+$("#fList").addEventListener("click", e => {
+  const b = e.target.closest("[data-solopen]"); if (!b) return;
+  solOpen.add(b.dataset.solopen); b.outerHTML = solHTML(b.dataset.solopen);
+});
 function updateBrandSum(m) {
   const el = document.querySelector(`[data-bsum="${CSS.escape(m)}"]`); if (!el) return;
-  const cm = allProducts().filter(p => (p.marque || "Sans marque") === m).reduce((s, p) => s + num(R.facings[p.id]) * num(p.largeur), 0);
+  const P = REF.params;
+  const cm = allProducts().filter(p => (p.marque || "Sans marque") === m).reduce((s, p) => s + num(R.facings[p.id]) * num(p.largeur) + num(R.dp[p.id]) * num(P.dp) + num(R.pal[p.id]) * num(P.pal), 0);
   el.textContent = cm ? fmtCm(cm) : "";
 }
 function updateFacingRow(pid) {
-  const row = document.querySelector(`.prod[data-pid="${pid}"]`); if (row) row.classList.toggle("has", !!R.facings[pid]);
+  const row = document.querySelector(`.prod[data-pid="${pid}"]`); if (row) row.classList.toggle("has", !!R.facings[pid] || hasSol(pid));
+  renderSolPills();
   const p = allProducts().find(x => x.id === pid); if (p) updateBrandSum(p.marque || "Sans marque");
 }
 $("#addLocalProd").onclick = () => productForm(null, true);
@@ -670,8 +707,8 @@ function renderResult() {
       <table class="table">
         <tr><td>DGP packs (étagères, tablettes virtuelles, sol, mobilier)</td><td>${fmtCm(c.dgpPack)}</td></tr>
         <tr><td>DGP cave à bière</td><td>${fmtCm(c.dgpCab)}</td></tr>
-        <tr><td>dont demi-palettes</td><td>${fmtCm(c.dpCm)}</td></tr>
-        <tr><td>dont palettes</td><td>${fmtCm(c.palCm)}</td></tr>
+        <tr><td>dont demi-palettes (${c.nbDp})</td><td>${fmtCm(c.dpCm)}</td></tr>
+        <tr><td>dont palettes (${c.nbPal})</td><td>${fmtCm(c.palCm)}</td></tr>
         <tr><td>LD AB InBev packs</td><td>${fmtCm(c.ldPack)}</td></tr>
         <tr><td>LD AB InBev cave à bière</td><td>${fmtCm(c.ldCab)}</td></tr>
         <tr><td><b>PDL = LD / DGP</b></td><td>${fmtCm(c.ld)} / ${fmtCm(c.dgp)}</td></tr>
@@ -700,7 +737,7 @@ function renderHist() {
 $("#histList").addEventListener("click", async e => {
   const it = e.target.closest("[data-h]"); if (!it) return;
   const h = HIST.find(x => x.id === it.dataset.h);
-  if (e.target.closest("[data-hopen]")) { R = structuredClone(h.releve); saveDraft(); renderRayon(); show("resultat"); toast("Relevé ouvert"); }
+  if (e.target.closest("[data-hopen]")) { R = migrate(structuredClone(h.releve)); saveDraft(); renderRayon(); show("resultat"); toast("Relevé ouvert"); }
   if (e.target.closest("[data-hdel]")) {
     if (!confirm(`Supprimer le relevé ${h.magasin || ""} du ${h.date} ?`)) return;
     HIST = HIST.filter(x => x !== h); persistHist(); renderHist();
@@ -724,9 +761,13 @@ $("#newReleve").onclick = () => {
 $("#refTabs").onclick = e => { const b = e.target.closest("[data-rt]"); if (!b) return; refTab = b.dataset.rt; renderRef(); };
 function renderRef() {
   document.querySelectorAll("#refTabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.rt === refTab));
-  $("#refMode").textContent = canEditRef
-    ? (artifactApi ? "Modifiez le référentiel puis publiez-le : tous les M1 reçoivent la nouvelle version à leur prochaine ouverture du lien." : "Modifiez le référentiel, puis téléchargez la page à jour et remplacez le fichier hébergé.")
-    : "Consultation seule : le référentiel est géré par l'administrateur.";
+  $("#refMode").textContent = !canEditRef
+    ? "Consultation seule : le référentiel est géré par l'administrateur."
+    : !isAdmin
+    ? "Vos ajouts et modifications restent sur ce téléphone. Ils sont conservés quand l'administrateur met à jour le référentiel commun."
+    : artifactApi
+    ? "Modifiez le référentiel puis publiez-le : tous les M1 reçoivent la nouvelle version à leur prochaine ouverture du lien."
+    : "Modifiez le référentiel, puis téléchargez la page à jour et remplacez le fichier hébergé.";
   const ro = canEditRef ? "" : "disabled";
   renderPublishBar();
   const body = $("#refBody");
@@ -743,7 +784,7 @@ function renderRef() {
           <div class="list-item" data-rp="${p.id}">
             <div class="grow">
               <div style="font-weight:600">${esc(p.marque)} ${esc(p.nom)}</div>
-              <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""}</div>
+              <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${!isAdmin && !isPublished("produits", p.id) ? `<span class="pill">Ajouté sur ce téléphone</span>` : ""}</div>
             </div>
             <input class="inline" inputmode="decimal" value="${num(p.largeur)}" data-pw aria-label="Largeur en cm" ${ro}><span class="unit" style="font-size:13px;color:var(--muted)">cm</span>
             ${canEditRef ? `<button class="icon-btn" data-pedit aria-label="Modifier">✎</button>` : ""}
@@ -908,7 +949,7 @@ $("#dlg").addEventListener("click", e => { if (e.target === $("#dlg")) $("#dlg")
 /* ------------------------------------------------------------------ */
 function renderPublishBar() {
   const bar = $("#pubBar"); if (!bar) return;
-  if (!canEditRef || !refDirty) { bar.hidden = true; return; }
+  if (!isAdmin || !canEditRef || !refDirty) { bar.hidden = true; return; }
   bar.hidden = false;
   $("#pubGo").textContent = artifactApi ? "Publier pour tous les M1" : "Télécharger la page à jour";
   $("#pubMsg").textContent = artifactApi
@@ -943,8 +984,9 @@ async function publishRef() {
   } catch (e) {
     const code = e && e.code;
     if (code === "not_granted" || code === "not_writer") {
-      canEditRef = false; REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null);
-      renderRef(); refreshLive(); toast("Seul l'auteur de l'application peut publier le référentiel");
+      isAdmin = false; canEditRef = REFERENTIEL_MODIFIABLE_PAR_TOUS;
+      if (!canEditRef) { REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null); }
+      renderPublishBar(); renderRef(); refreshLive(); toast("Seul l'auteur de l'application peut publier le référentiel");
     } else if (code === "conflict") {
       toast("Une autre version vient d'être publiée, la page se recharge");
     } else {
@@ -966,14 +1008,25 @@ document.addEventListener("click", e => {
 /* ------------------------------------------------------------------ */
 function applyDraftIfAny() {
   const d = LS.get("pdl.refDraft", null);
-  if (d && d.ref && (d.baseRev || 0) === (PUBLISHED.rev || 0)) { REF = d.ref; refDirty = true; }
+  if (!d || !d.ref) return;
+  if ((d.baseRev || 0) === (PUBLISHED.rev || 0)) { REF = d.ref; refDirty = true; return; }
+  // Nouvelle version du référentiel commun : on la prend et on y rajoute les ajouts faits sur ce téléphone
+  if (isAdmin) { LS.set("pdl.refDraft", null); return; }
+  const merged = structuredClone(PUBLISHED);
+  for (const list of ["produits", "elements", "mobiliers"]) {
+    for (const item of d.ref[list] || []) if (!isPublished(list, item.id)) merged[list].push(item);
+  }
+  REF = merged; refDirty = true;
+  LS.set("pdl.refDraft", { baseRev: PUBLISHED.rev || 0, ref: REF });
 }
 if (!window.claude || !window.claude.use) {
-  // Page hébergée hors claude.ai : référentiel en lecture seule, sauf en ajoutant ?admin à l'adresse
-  canEditRef = new URLSearchParams(location.search).has("admin");
+  // Page hébergée hors claude.ai : ajoutez ?admin à l'adresse pour préparer le référentiel commun
+  isAdmin = new URLSearchParams(location.search).has("admin");
+  canEditRef = REFERENTIEL_MODIFIABLE_PAR_TOUS || isAdmin;
   if (canEditRef) applyDraftIfAny();
-  setSync(canEditRef ? (refDirty ? "Modifications non téléchargées" : "Mode administrateur") : "Référentiel à jour");
+  setSync(isAdmin ? (refDirty ? "Modifications non téléchargées" : "Mode administrateur") : refDirty ? "Référentiel modifié sur cet appareil" : "Référentiel à jour");
 } else {
+  if (canEditRef) applyDraftIfAny();
   setSync("Référentiel à jour");
 }
 renderRayon();
@@ -983,7 +1036,7 @@ renderRayon();
   try {
     const art = await window.claude.use("artifact");
     if (!art) return;
-    artifactApi = art; canEditRef = true; applyDraftIfAny();
+    artifactApi = art; isAdmin = true; canEditRef = true; applyDraftIfAny();
     setSync(refDirty ? "Modifications non publiées" : "Référentiel à jour");
     renderElems(); renderMobs(); refreshLive(); renderPublishBar();
     if ($("#v-ref").classList.contains("on")) renderRef();
