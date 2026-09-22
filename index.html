@@ -292,6 +292,8 @@ const HEAD_TAGS = "<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" con
 /* Données par défaut                                                  */
 /* ------------------------------------------------------------------ */
 const uid = () => Math.random().toString(36).slice(2, 10);
+// Identifiant stable par SKU (marque + produit + format) : les relevés gardent leurs facings d'une ouverture à l'autre
+function skuId(m, p, f) { return "sku-" + `${m}|${p}|${f}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"); }
 const DEFAULT_REF = {
   params: { dp: 180, pal: 360, elemRef: 133, etag: 5 },
   elements: [
@@ -311,25 +313,107 @@ const DEFAULT_REF = {
     { id: "m9", nom: "Corner BUD", cm: 539, abi: true }
   ],
   produits: [
-    ["Leffe","Blonde","Pack 12x25cl",26,"pack",true],
-    ["Leffe","Blonde","Pack 6x25cl",17,"pack",true],
-    ["Leffe","Ruby","Pack 6x25cl",17,"pack",true],
-    ["Leffe","Blonde","Bouteille 75cl",9,"cab",true],
-    ["Hoegaarden","Blanche","Pack 6x25cl",17,"pack",true],
-    ["Corona","Extra","Pack 6x35,5cl",19,"pack",true],
-    ["Corona","Extra","Pack 12x33cl can",27,"pack",true],
-    ["Stella Artois","Blonde","Pack 20x25cl",33,"pack",true],
-    ["Bud","Lager","Pack 12x25cl",26,"pack",true],
-    ["Tripel Karmeliet","Blonde","Bouteille 33cl",6.5,"cab",true],
-    ["Kwak","Ambrée","Pack 4x33cl",14,"pack",true],
-    ["Heineken","Blonde","Pack 12x25cl",26,"pack",false],
-    ["Kronenbourg","Blonde","Pack 26x25cl",40,"pack",false],
-    ["1664","Blonde","Pack 12x25cl",26,"pack",false],
-    ["Desperados","Original","Pack 6x33cl",18,"pack",false],
-    ["Affligem","Blonde","Pack 6x25cl",17,"pack",false],
-    ["Grimbergen","Blonde","Pack 6x25cl",17,"pack",false]
-  ].map(([marque,nom,format,largeur,segment,abi]) => ({ id: uid(), marque, nom, format, largeur, segment, abi })),
-  exemple: true
+    ["Atlas", "Originale", "Can 50cl", 6.6, "pack", true],
+    ["Atlas", "Pils", "Can 50cl", 6.6, "pack", true],
+    ["Bud", "Originale", "6x25cl", 11.0, "pack", true],
+    ["Bud", "Originale", "6x33cl", 12.5, "pack", true],
+    ["Bud", "Originale", "12x25cl", 16.7, "pack", true],
+    ["Bud", "Originale", "12x33cl", 18.2, "pack", true],
+    ["Bud", "Originale", "20x25cl", 24.0, "pack", true],
+    ["Bud", "Originale", "Can 50cl", 6.63, "pack", true],
+    ["Bud", "Originale", "Can 4x50cl", 13.2, "pack", true],
+    ["Bud", "Originale", "Can 6x33cl", 13.1, "pack", true],
+    ["Bud", "0,0", "6x25cl", 11.0, "pack", true],
+    ["Corona", "Extra", "3x33cl", 6.4, "pack", true],
+    ["Corona", "Extra", "12x25cl", 16.7, "pack", true],
+    ["Corona", "Extra", "18x33cl", 18.5, "pack", true],
+    ["Corona", "Extra", "20x25cl", 22.3, "pack", true],
+    ["Corona", "Extra", "Can 50cl", 6.6, "pack", true],
+    ["Corona", "Extra", "Can 6x33cl", 13.2, "pack", true],
+    ["Corona", "0,0", "6x33cl", 11.75, "pack", true],
+    ["Corona", "0,0", "Can 4x33cl", 13.4, "pack", true],
+    ["Flying Fish", "Originale", "3x33cl", 6.0, "pack", true],
+    ["Flying Fish", "Originale", "6x33cl", 13.25, "pack", true],
+    ["Flying Fish", "Originale", "12x33cl", 17.9, "pack", true],
+    ["Flying Fish", "Originale", "Can 15cl", 5.3, "pack", true],
+    ["Flying Fish", "Originale", "Can 50cl", 6.6, "pack", true],
+    ["Hoegaarden", "Blanche", "6x25cl", 12.0, "pack", true],
+    ["Hoegaarden", "Blanche", "12x25cl", 18.0, "pack", true],
+    ["Hoegaarden", "Blanche", "Can 50cl", 6.6, "pack", true],
+    ["Hoegaarden", "Rosée", "6x25cl", 12.0, "pack", true],
+    ["Hoegaarden", "Rosée 0,0", "6x25cl", 12.0, "pack", true],
+    ["Kwak", "Blonde", "33cl", 6.0, "cab", true],
+    ["Kwak", "Blonde", "75cl", 8.4, "cab", true],
+    ["Kwak", "Blonde", "Can 50cl", 6.6, "pack", true],
+    ["Kwak", "Originale", "33cl", 6.0, "cab", true],
+    ["Kwak", "Originale", "75cl", 8.32, "cab", true],
+    ["Kwak", "Originale", "6x33cl", 12.5, "pack", true],
+    ["Kwak", "Originale", "Coffret 4x33cl", 13.0, "pack", true],
+    ["Kwak", "Rouge", "33cl", 6.0, "cab", true],
+    ["Kwak", "Rouge", "75cl", 8.4, "cab", true],
+    ["Kwak", "Rouge", "Can 50cl", 6.6, "pack", true],
+    ["Leffe", "Blonde", "75cl", 8.32, "cab", true],
+    ["Leffe", "Blonde", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Blonde", "6x33cl", 12.5, "pack", true],
+    ["Leffe", "Blonde", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Blonde", "12x33cl", 18.7, "pack", true],
+    ["Leffe", "Blonde", "15x25cl", 18.2, "pack", true],
+    ["Leffe", "Blonde", "18x25cl", 17.55, "pack", true],
+    ["Leffe", "Blonde", "20x25cl", 24.0, "pack", true],
+    ["Leffe", "Blonde", "20x33cl", 24.4, "pack", true],
+    ["Leffe", "Blonde", "24x25cl", 24.0, "pack", true],
+    ["Leffe", "Blonde", "24x33cl", 25.0, "pack", true],
+    ["Leffe", "Blonde", "28x25cl", 23.51, "pack", true],
+    ["Leffe", "Blonde", "Can 50cl", 6.6, "pack", true],
+    ["Leffe", "Blonde", "Can 4x50cl", 13.2, "pack", true],
+    ["Leffe", "Blonde", "Can 6x33cl", 13.2, "pack", true],
+    ["Leffe", "Blonde", "Can 8x50cl", 26.5, "pack", true],
+    ["Leffe", "Blonde", "Can 12x33cl", 17.3, "pack", true],
+    ["Leffe", "Ambrée", "75cl", 8.32, "cab", true],
+    ["Leffe", "Ambrée", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Ambrée", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Blanche", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Blanche", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Blonde 0,0", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Blonde 0,0", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Blonde 0,0", "Can 6x33cl", 13.2, "pack", true],
+    ["Leffe", "Brune", "75cl", 8.32, "cab", true],
+    ["Leffe", "Brune", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Nectar", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Prestige 1240", "75cl", 8.32, "cab", true],
+    ["Leffe", "Prestige 1240", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Prestige 1240", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Rituel 9°", "75cl", 8.32, "cab", true],
+    ["Leffe", "Rituel 9°", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Rituel 9°", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Rituel 9°", "Can 50cl", 6.6, "pack", true],
+    ["Leffe", "Ruby", "75cl", 8.32, "cab", true],
+    ["Leffe", "Ruby", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Ruby", "6x33cl", 12.5, "pack", true],
+    ["Leffe", "Ruby", "12x25cl", 18.0, "pack", true],
+    ["Leffe", "Ruby", "20x25cl", 24.0, "pack", true],
+    ["Leffe", "Ruby", "Can 50cl", 6.6, "pack", true],
+    ["Leffe", "Ruby 0,0", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Sélection", "Coffret 3x75cl", 16.1, "pack", true],
+    ["Leffe", "Triple", "75cl", 8.32, "cab", true],
+    ["Leffe", "Triple", "6x25cl", 12.0, "pack", true],
+    ["Leffe", "Triple", "12x25cl", 18.0, "pack", true],
+    ["Stella Artois", "Originale", "20x25cl", 24.0, "pack", true],
+    ["Stella Artois", "Originale", "Can 50cl", 6.6, "pack", true],
+    ["Stella Artois", "0,0", "6x25cl", 11.1, "pack", true],
+    ["Tripel Karmeliet", "Originale", "33cl", 6.0, "cab", true],
+    ["Tripel Karmeliet", "Originale", "75cl", 8.4, "cab", true],
+    ["Tripel Karmeliet", "Originale", "6x25cl", 11.4, "pack", true],
+    ["Tripel Karmeliet", "Originale", "6x33cl", 12.5, "pack", true],
+    ["Tripel Karmeliet", "Originale", "12x25cl", 18.0, "pack", true],
+    ["Tripel Karmeliet", "Originale", "20x25cl", 22.5, "pack", true],
+    ["Tripel Karmeliet", "Originale", "Can 50cl", 6.6, "pack", true],
+    ["Tripel Karmeliet", "Originale", "Coffret 4x33cl", 12.5, "pack", true],
+    ["Tripel Karmeliet", "0,0", "4x33cl", 12.0, "pack", true],
+    ["Victoria", "Originale", "75cl", 8.4, "cab", true]
+  ].map(([marque,nom,format,largeur,segment,abi]) => ({ id: skuId(marque, nom, format), marque, nom, format, largeur, segment, abi })),
+  exemple: false,
+  rev: 1
 };
 const newReleve = () => ({
   id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
@@ -346,7 +430,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 const EMBED = (() => { try { return JSON.parse(document.getElementById("ref-data").textContent); } catch { return null; } })();
-const PUBLISHED = EMBED && EMBED.produits ? EMBED : { ...structuredClone(DEFAULT_REF), rev: 0 };
+const PUBLISHED = EMBED && EMBED.produits ? EMBED : structuredClone(DEFAULT_REF);
 let REF = structuredClone(PUBLISHED);
 let refDirty = false;
 let R = migrate(LS.get("pdl.draft", null) || newReleve());
@@ -375,7 +459,7 @@ function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.ad
 function saveDraft() { LS.set("pdl.draft", R); }
 function saveRef() {
   refDirty = true;
-  LS.set("pdl.refDraft", { baseRev: PUBLISHED.rev || 0, ref: REF });
+  LS.set("pdl.refDraft.v2", { baseRev: PUBLISHED.rev || 0, ref: REF });
   setSync(!isAdmin ? "Référentiel modifié sur cet appareil" : artifactApi ? "Modifications non publiées" : "Modifications non téléchargées");
   renderPublishBar();
 }
@@ -1061,8 +1145,8 @@ function renderRef() {
         <div class="field"><label>Élément de référence (cm)</label><input inputmode="decimal" data-pp="elemRef" value="${P.elemRef}" ${ro}></div>
         <div class="field"><label>Étagères par défaut</label><input inputmode="numeric" data-pp="etag" value="${P.etag}" ${ro}></div>
       </div>
-      ${canEditRef ? `<div class="btn-row" style="margin-top:16px"><button class="btn danger" id="resetRef">Revenir au référentiel d'exemple</button></div>` : ""}`;
-    if (canEditRef) $("#resetRef").onclick = () => { if (confirm("Remplacer tout le référentiel par les exemples ?")) { REF = { ...structuredClone(DEFAULT_REF), rev: PUBLISHED.rev || 0 }; saveRef(); renderRef(); refreshLive(); } };
+      ${canEditRef ? `<div class="btn-row" style="margin-top:16px"><button class="btn danger" id="resetRef">Revenir au référentiel d'origine</button></div>` : ""}`;
+    if (canEditRef) $("#resetRef").onclick = () => { if (confirm("Remplacer tout le référentiel par la version d'origine ?")) { REF = { ...structuredClone(DEFAULT_REF), rev: PUBLISHED.rev || 0 }; saveRef(); renderRef(); refreshLive(); } };
   }
 }
 $("#refBody").addEventListener("change", e => {
@@ -1223,13 +1307,13 @@ async function publishRef() {
   const next = { ...JSON.parse(JSON.stringify(REF)), supprimes: [], rev: (PUBLISHED.rev || 0) + 1 };
   try {
     await artifactApi.publish(buildDocument(next));
-    LS.set("pdl.refDraft", null); refDirty = false;
+    LS.set("pdl.refDraft.v2", null); refDirty = false;
     toast("Référentiel publié");
   } catch (e) {
     const code = e && e.code;
     if (code === "not_granted" || code === "not_writer") {
       isAdmin = false; canEditRef = REFERENTIEL_MODIFIABLE_PAR_TOUS;
-      if (!canEditRef) { REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null); }
+      if (!canEditRef) { REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft.v2", null); }
       renderPublishBar(); renderRef(); refreshLive(); toast("Seul l'auteur de l'application peut publier le référentiel");
     } else if (code === "conflict") {
       toast("Une autre version vient d'être publiée, la page se recharge");
@@ -1242,7 +1326,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("#pubGo")) publishRef();
   if (e.target.closest("#pubUndo")) {
     if (!confirm("Annuler toutes les modifications non publiées ?")) return;
-    REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft", null);
+    REF = structuredClone(PUBLISHED); refDirty = false; LS.set("pdl.refDraft.v2", null);
     setSync("Référentiel à jour"); renderRef(); renderElems(); renderMobs(); refreshLive();
   }
 });
@@ -1251,11 +1335,11 @@ document.addEventListener("click", e => {
 /* Démarrage                                                           */
 /* ------------------------------------------------------------------ */
 function applyDraftIfAny() {
-  const d = LS.get("pdl.refDraft", null);
+  const d = LS.get("pdl.refDraft.v2", null);
   if (!d || !d.ref) return;
   if ((d.baseRev || 0) === (PUBLISHED.rev || 0)) { REF = d.ref; refDirty = true; return; }
   // Nouvelle version du référentiel commun : on la prend et on y rajoute les ajouts faits sur ce téléphone
-  if (isAdmin) { LS.set("pdl.refDraft", null); return; }
+  if (isAdmin) { LS.set("pdl.refDraft.v2", null); return; }
   const merged = structuredClone(PUBLISHED);
   merged.supprimes = d.ref.supprimes || [];
   merged.produits = merged.produits.filter(p => !merged.supprimes.includes(p.id));
@@ -1263,7 +1347,7 @@ function applyDraftIfAny() {
     for (const item of d.ref[list] || []) if (!isPublished(list, item.id)) merged[list].push(item);
   }
   REF = merged; refDirty = true;
-  LS.set("pdl.refDraft", { baseRev: PUBLISHED.rev || 0, ref: REF });
+  LS.set("pdl.refDraft.v2", { baseRev: PUBLISHED.rev || 0, ref: REF });
 }
 if (!window.claude || !window.claude.use) {
   // Page hébergée hors claude.ai : ajoutez ?admin à l'adresse pour préparer le référentiel commun
