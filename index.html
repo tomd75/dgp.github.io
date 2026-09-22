@@ -194,12 +194,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div id="elemList"></div>
     <button class="btn amber" id="addElem" style="width:100%">+ Ajouter des éléments</button>
 
-    <h2>Au sol</h2>
-    <p class="hint">Saisissez le nombre total présent dans le rayon, puis attribuez-les aux produits dans l'onglet Facings. Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Posée dans le mauvais sens, elle compte pour deux.</p>
+    <h2>Au sol, hors éléments</h2>
+    <p class="hint">Uniquement les demi-palettes et palettes posées seules, en dehors d'un élément. Celles intégrées à un élément se saisissent dans le bloc de l'élément. Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Posée dans le mauvais sens, elle compte pour deux.</p>
     <div class="card">
       <div class="grid2">
-        <div class="field"><label>Demi-palettes au total</label><div data-bind="dpTotal"></div></div>
-        <div class="field"><label>Palettes au total</label><div data-bind="palTotal"></div></div>
+        <div class="field"><label>Demi-palettes seules</label><div data-bind="dpTotal"></div></div>
+        <div class="field"><label>Palettes seules</label><div data-bind="palTotal"></div></div>
       </div>
       <div id="solRecap" style="margin-top:12px"></div>
     </div>
@@ -398,8 +398,6 @@ const DEFAULT_REF = {
     ["Leffe", "Triple", "75cl", 8.32, "cab", true],
     ["Leffe", "Triple", "6x25cl", 12.0, "pack", true],
     ["Leffe", "Triple", "12x25cl", 18.0, "pack", true],
-    ["Stella Artois", "Originale", "6x25cl", 11.0, "pack", true],
-    ["Stella Artois", "Originale", "12x25cl", 16.8, "pack", true],
     ["Stella Artois", "Originale", "20x25cl", 24.0, "pack", true],
     ["Stella Artois", "Originale", "Can 50cl", 6.6, "pack", true],
     ["Stella Artois", "0,0", "6x25cl", 11.1, "pack", true],
@@ -419,7 +417,7 @@ const DEFAULT_REF = {
 };
 const newReleve = () => ({
   id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
-  elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0 }],
+  elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0, dp: 0, pal: 0 }],
   dpTotal: 0, palTotal: 0, dp: {}, pal: {},
   mobiliers: [], facings: {}, locaux: []
 });
@@ -514,7 +512,9 @@ function compute() {
     parMarque[k].cm += cm; parMarque[k].facings += f;
   }
   // Totaux au sol : le DGP prend le total saisi (ou le total attribué s'il est plus élevé)
-  const totDp = Math.max(num(R.dpTotal), nbDp), totPal = Math.max(num(R.palTotal), nbPal);
+  const elDp = R.elements.reduce((a, g) => a + num(g.dp), 0), elPal = R.elements.reduce((a, g) => a + num(g.pal), 0);
+  const saisiDp = num(R.dpTotal) + elDp, saisiPal = num(R.palTotal) + elPal;
+  const totDp = Math.max(saisiDp, nbDp), totPal = Math.max(saisiPal, nbPal);
   dpCm = totDp * num(P.dp); palCm = totPal * num(P.pal);
   dgpPack += dpCm + palCm;
   const naDp = totDp - nbDp, naPal = totPal - nbPal;
@@ -525,7 +525,7 @@ function compute() {
   const releve = relevePack + releveCab + ldMob;
   return {
     dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm, nbDp, nbPal, totDp, totPal, naDp, naPal,
-    depasse: nbDp > num(R.dpTotal) || nbPal > num(R.palTotal),
+    depasse: nbDp > saisiDp || nbPal > saisiPal, elDp, elPal,
     pdl: dgp ? ld / dgp : 0, pdlPack: dgpPack ? ldPack / dgpPack : 0, pdlCab: dgpCab ? ldCab / dgpCab : 0,
     nbElem: Math.round(elemEq + 1e-9), elemEq, parMarque, releve
   };
@@ -569,7 +569,8 @@ document.addEventListener("click", e => {
     writeKey(key, v);
     const inp = st.parentElement.querySelector("input"); inp.value = Math.max(0, v);
     if (/^(f|dp|pal):/.test(key)) updateFacingRow(key.split(":")[1]);
-    if (key.startsWith("r:")) renderSolPills();
+    if (!/^(f|dp|pal):/.test(key)) renderSolPills();
+    if (/^el:.*:(dp|pal)$/.test(key)) renderElems();
     return;
   }
   const go = e.target.closest("[data-goto]");
@@ -580,7 +581,7 @@ document.addEventListener("input", e => {
   if (t.matches(".stepper input[data-key]")) {
     writeKey(t.dataset.key, num(t.value));
     if (/^(f|dp|pal):/.test(t.dataset.key)) updateFacingRow(t.dataset.key.split(":")[1]);
-    if (t.dataset.key.startsWith("r:")) renderSolPills();
+    if (!/^(f|dp|pal):/.test(t.dataset.key)) renderSolPills();
   }
 });
 
@@ -616,7 +617,7 @@ function renderSolPills() {
   }).join("");
   const na = (c.naDp || c.naPal) ? `<div class="list-item"><div class="grow" style="color:var(--muted)">Non attribuées, comptées hors AB InBev</div><span style="font-size:14px">${[c.naDp ? `${c.naDp} DP` : "", c.naPal ? `${c.naPal} palette${c.naPal > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ")}</span></div>` : "";
   $("#solRecap").innerHTML = (c.totDp || c.totPal) ? `
-    <div class="row-head" style="margin-bottom:4px"><span style="font-size:14px">Attribuées : ${c.nbDp}/${c.totDp} DP, ${c.nbPal}/${c.totPal} palette${c.totPal > 1 ? "s" : ""}</span><span class="pill">${fmtCm(c.dpCm + c.palCm)}</span></div>
+    <div class="row-head" style="margin-bottom:4px"><span style="font-size:14px">Total rayon : ${c.totDp} DP${c.elDp ? ` (dont ${c.elDp} dans les éléments)` : ""}, ${c.totPal} palette${c.totPal > 1 ? "s" : ""}${c.elPal ? ` (dont ${c.elPal} dans les éléments)` : ""}. Attribuées : ${c.nbDp} DP, ${c.nbPal} palette${c.nbPal > 1 ? "s" : ""}</span><span class="pill">${fmtCm(c.dpCm + c.palCm)}</span></div>
     ${c.depasse ? `<div class="warn" style="margin:6px 0">Plus d'attributions que le total saisi : le calcul retient le nombre attribué. Vérifiez le comptage.</div>` : ""}
     ${lignes}${na}
     <button class="btn small" data-goto="facings" style="margin-top:10px">Attribuer dans Facings</button>` : "";
@@ -639,6 +640,11 @@ function renderElems() {
         <div class="field"><label>Étagères / élément</label>${stepperHTML(g.etag, `el:${g.id}:etag`, true)}</div>
         <div class="field"><label>Tablettes virtuelles</label>${stepperHTML(g.virt, `el:${g.id}:virt`, true)}</div>
       </div>
+      <div class="sol-row" style="margin-top:12px">
+        <div class="sol-f"><span>Demi-palettes au sol</span>${stepperHTML(g.dp, `el:${g.id}:dp`, true)}</div>
+        <div class="sol-f"><span>Palettes au sol</span>${stepperHTML(g.pal, `el:${g.id}:pal`, true)}</div>
+      </div>
+      ${num(g.dp) || num(g.pal) ? `<p class="hint" style="margin:6px 0 0">Ne comptez pas comme étagère le niveau occupé par la demi-palette ou la palette.</p>` : ""}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
         <div class="seg" role="group" aria-label="Segment">
           ${["pack","cab","mixte"].map(s => `<button type="button" data-seg="${s}" aria-pressed="${g.segment === s}">${{pack:"Packs",cab:"Cave à bière",mixte:"Mixte"}[s]}</button>`).join("")}
@@ -660,7 +666,7 @@ $("#elemList").addEventListener("click", e => {
   if (e.target.closest("[data-delel]")) { R.elements = R.elements.filter(x => x !== g); saveDraft(); renderElems(); refreshLive(); }
 });
 $("#addElem").onclick = () => {
-  R.elements.push({ id: uid(), typeId: REF.elements[0]?.id || "", nb: 1, etag: num(REF.params.etag) || 5, segment: "pack", cabParElem: 0, virt: 0 });
+  R.elements.push({ id: uid(), typeId: REF.elements[0]?.id || "", nb: 1, etag: num(REF.params.etag) || 5, segment: "pack", cabParElem: 0, virt: 0, dp: 0, pal: 0 });
   saveDraft(); renderElems(); refreshLive();
 };
 
@@ -979,11 +985,11 @@ async function exportPdf() {
     const segL = { pack: "Packs", cab: "Cave à bière", mixte: "Mixte" };
     const compo = R.elements.map(g => {
       const t = elemType(g.typeId);
-      return [T(t.nom), String(num(g.nb)), String(num(g.etag)), T(segL[g.segment] + (g.segment === "mixte" ? ` (${num(g.cabParElem)} CAB)` : "")), String(num(g.virt))];
+      return [T(t.nom), String(num(g.nb)), String(num(g.etag)), T(segL[g.segment] + (g.segment === "mixte" ? ` (${num(g.cabParElem)} CAB)` : "")), String(num(g.virt)), String(num(g.dp) || ""), String(num(g.pal) || "")];
     });
     table({
-      head: [["Type d'élément", "Nombre", "Étagères / élément", "Segment", "Tablettes virtuelles"]], body: compo,
-      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 4: { halign: "right" } }
+      head: [["Type d'élément", "Nombre", "Étagères / élément", "Segment", "Tabl. virtuelles", "DP", "Pal."]], body: compo,
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" } }
     });
     const mobRows = R.mobiliers.map(m => { const cat = REF.mobiliers.find(x => x.id === m.mobId) || { nom: "Mobilier supprimé", cm: 0 };
       return [T(cat.nom), String(num(m.nb)), T(fmtCm(num(cat.cm) * num(m.nb))), m.segment === "cab" ? "Cave à bière" : "Packs", m.abi ? "Oui" : "Non"]; });
