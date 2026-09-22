@@ -195,8 +195,14 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button class="btn amber" id="addElem" style="width:100%">+ Ajouter des éléments</button>
 
     <h2>Au sol</h2>
-    <p class="hint">Les demi-palettes et palettes se saisissent produit par produit dans l'onglet Facings. Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Posée dans le mauvais sens, elle compte pour deux.</p>
-    <div class="card" id="solRecap"></div>
+    <p class="hint">Saisissez le nombre total présent dans le rayon, puis attribuez-les aux produits dans l'onglet Facings. Une demi-palette compte si elle repose sur un support et atteint 4 hauteurs de gerbage (pack Leffe 12x25cl). Posée dans le mauvais sens, elle compte pour deux.</p>
+    <div class="card">
+      <div class="grid2">
+        <div class="field"><label>Demi-palettes au total</label><div data-bind="dpTotal"></div></div>
+        <div class="field"><label>Palettes au total</label><div data-bind="palTotal"></div></div>
+      </div>
+      <div id="solRecap" style="margin-top:12px"></div>
+    </div>
 
     <h2>Mobilier</h2>
     <p class="hint">Mobilier fournisseur : on le compte seulement s'il est intégré physiquement au rack bière.</p>
@@ -212,6 +218,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   <section class="view" id="v-facings" aria-label="Facings">
     <h2>Facings</h2>
     <p class="hint">Touchez + pour chaque facing. Un facing gerbé (deux packs superposés) compte pour un seul facing.</p>
+    <div id="fSol"></div>
     <input class="search" id="fSearch" type="search" placeholder="Chercher une marque, un produit, un format">
     <div class="chips" id="fChips"></div>
     <div id="fList"></div>
@@ -224,6 +231,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div id="resBody"></div>
     <div class="btn-row" style="margin-top:16px">
       <button class="btn primary" id="saveReleve" style="flex:1">Enregistrer le relevé</button>
+      <button class="btn" id="exportPdf">Exporter en PDF</button>
       <button class="btn" id="newReleve">Nouveau relevé</button>
     </div>
     <h2>Mes relevés</h2>
@@ -238,7 +246,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <button data-rt="produits" aria-pressed="true">Produits</button>
       <button data-rt="elements" aria-pressed="false">Éléments</button>
       <button data-rt="mobiliers" aria-pressed="false">Mobilier</button>
-      <button data-rt="params" aria-pressed="false">Règles</button>
+      <button data-rt="params" aria-pressed="false">Paramètres</button>
     </div>
     <div id="pubBar" class="warn" hidden style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
       <span id="pubMsg"></span>
@@ -326,7 +334,7 @@ const DEFAULT_REF = {
 const newReleve = () => ({
   id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
   elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0 }],
-  dp: {}, pal: {},
+  dpTotal: 0, palTotal: 0, dp: {}, pal: {},
   mobiliers: [], facings: {}, locaux: []
 });
 
@@ -346,6 +354,9 @@ function migrate(r) {
   if (!r.dp || "total" in r.dp) r.dp = {};
   if (!r.pal || "total" in r.pal) r.pal = {};
   r.locaux = r.locaux || []; r.facings = r.facings || {};
+  const sum = o => Object.values(o).reduce((a, b) => a + (Number(b) || 0), 0);
+  if (typeof r.dpTotal !== "number") r.dpTotal = sum(r.dp);
+  if (typeof r.palTotal !== "number") r.palTotal = sum(r.pal);
   return r;
 }
 let HIST = LS.get("pdl.hist", []);
@@ -405,21 +416,30 @@ function compute() {
     const f = num(R.facings[p.id]), d = num(R.dp[p.id]), pa = num(R.pal[p.id]);
     if (!f && !d && !pa) continue;
     const sol = d * num(P.dp) + pa * num(P.pal);
-    dpCm += d * num(P.dp); palCm += pa * num(P.pal); nbDp += d; nbPal += pa;
-    // Les demi-palettes et palettes entrent dans le DGP du segment du produit
-    if (p.segment === "cab") dgpCab += sol; else dgpPack += sol;
-    const cm = f * num(p.largeur) + sol;
-    if (p.segment === "cab") releveCab += cm; else relevePack += cm;
-    if (p.abi) { if (p.segment === "cab") ldCab += cm; else ldPack += cm; }
+    nbDp += d; nbPal += pa;
+    const cmF = f * num(p.largeur);
+    if (p.segment === "cab") releveCab += cmF; else relevePack += cmF;
+    relevePack += sol;
+    // Les demi-palettes et palettes sont dans le DGP packs (totaux saisis dans Rayon)
+    if (p.abi) { if (p.segment === "cab") ldCab += cmF; else ldPack += cmF; ldPack += sol; }
+    const cm = cmF + sol;
     const k = p.marque || "Sans marque";
     parMarque[k] = parMarque[k] || { cm: 0, abi: p.abi, facings: 0 };
     parMarque[k].cm += cm; parMarque[k].facings += f;
   }
+  // Totaux au sol : le DGP prend le total saisi (ou le total attribué s'il est plus élevé)
+  const totDp = Math.max(num(R.dpTotal), nbDp), totPal = Math.max(num(R.palTotal), nbPal);
+  dpCm = totDp * num(P.dp); palCm = totPal * num(P.pal);
+  dgpPack += dpCm + palCm;
+  const naDp = totDp - nbDp, naPal = totPal - nbPal;
+  const naCm = naDp * num(P.dp) + naPal * num(P.pal);
+  if (naCm) { parMarque["Sol non attribué (hors AB InBev)"] = { cm: naCm, abi: false, facings: 0 }; relevePack += naCm; }
   if (ldMob) { parMarque["Mobilier AB InBev"] = { cm: ldMob, abi: true, facings: 0 }; }
   const dgp = dgpPack + dgpCab, ld = ldPack + ldCab;
   const releve = relevePack + releveCab + ldMob;
   return {
-    dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm, nbDp, nbPal,
+    dgp, dgpPack, dgpCab, ld, ldPack, ldCab, dpCm, palCm, nbDp, nbPal, totDp, totPal, naDp, naPal,
+    depasse: nbDp > num(R.dpTotal) || nbPal > num(R.palTotal),
     pdl: dgp ? ld / dgp : 0, pdlPack: dgpPack ? ldPack / dgpPack : 0, pdlCab: dgpCab ? ldCab / dgpCab : 0,
     nbElem: Math.round(elemEq + 1e-9), elemEq, parMarque, releve
   };
@@ -463,6 +483,7 @@ document.addEventListener("click", e => {
     writeKey(key, v);
     const inp = st.parentElement.querySelector("input"); inp.value = Math.max(0, v);
     if (/^(f|dp|pal):/.test(key)) updateFacingRow(key.split(":")[1]);
+    if (key.startsWith("r:")) renderSolPills();
     return;
   }
   const go = e.target.closest("[data-goto]");
@@ -473,6 +494,7 @@ document.addEventListener("input", e => {
   if (t.matches(".stepper input[data-key]")) {
     writeKey(t.dataset.key, num(t.value));
     if (/^(f|dp|pal):/.test(t.dataset.key)) updateFacingRow(t.dataset.key.split(":")[1]);
+    if (t.dataset.key.startsWith("r:")) renderSolPills();
   }
 });
 
@@ -506,10 +528,17 @@ function renderSolPills() {
     if (R.pal[p.id]) parts.push(`${R.pal[p.id]} palette${R.pal[p.id] > 1 ? "s" : ""}`);
     return `<div class="list-item"><div class="grow">${esc(p.marque)} ${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""}</div><span style="font-size:14px">${parts.join(", ")}</span></div>`;
   }).join("");
-  $("#solRecap").innerHTML = `
-    <div class="row-head" style="margin-bottom:${lignes ? 4 : 0}px"><h3>${c.nbDp} demi-palette${c.nbDp > 1 ? "s" : ""}, ${c.nbPal} palette${c.nbPal > 1 ? "s" : ""}</h3><span class="pill">${fmtCm(c.dpCm + c.palCm)}</span></div>
-    ${lignes || `<p class="hint" style="margin:6px 0 0">Aucune pour l'instant.</p>`}
-    <button class="btn small" data-goto="facings" style="margin-top:10px">Saisir dans Facings</button>`;
+  const na = (c.naDp || c.naPal) ? `<div class="list-item"><div class="grow" style="color:var(--muted)">Non attribuées, comptées hors AB InBev</div><span style="font-size:14px">${[c.naDp ? `${c.naDp} DP` : "", c.naPal ? `${c.naPal} palette${c.naPal > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ")}</span></div>` : "";
+  $("#solRecap").innerHTML = (c.totDp || c.totPal) ? `
+    <div class="row-head" style="margin-bottom:4px"><span style="font-size:14px">Attribuées : ${c.nbDp}/${c.totDp} DP, ${c.nbPal}/${c.totPal} palette${c.totPal > 1 ? "s" : ""}</span><span class="pill">${fmtCm(c.dpCm + c.palCm)}</span></div>
+    ${c.depasse ? `<div class="warn" style="margin:6px 0">Plus d'attributions que le total saisi : le calcul retient le nombre attribué. Vérifiez le comptage.</div>` : ""}
+    ${lignes}${na}
+    <button class="btn small" data-goto="facings" style="margin-top:10px">Attribuer dans Facings</button>` : "";
+  document.querySelectorAll("[data-bind]").forEach(el => { const i = el.querySelector("input"); if (i && document.activeElement !== i) i.value = num(getPath(R, el.dataset.bind)); });
+  const fs = $("#fSol");
+  if (fs) fs.innerHTML = (c.totDp || c.totPal)
+    ? `<div class="warn">Au sol : ${c.nbDp}/${c.totDp} demi-palette${c.totDp > 1 ? "s" : ""} et ${c.nbPal}/${c.totPal} palette${c.totPal > 1 ? "s" : ""} attribuées. Le reste compte hors AB InBev.</div>`
+    : `<p class="hint">Aucune demi-palette ni palette saisie dans l'onglet Rayon.</p>`;
 }
 function renderElems() {
   const opts = id => REF.elements.map(e => `<option value="${e.id}" ${e.id === id ? "selected" : ""}>${esc(e.nom)} (${e.largeur} cm)</option>`).join("");
@@ -601,7 +630,7 @@ $("#fChips").onclick = e => { const b = e.target.closest("[data-f]"); if (!b) re
 $("#fSearch").addEventListener("input", e => { fQuery = e.target.value.toLowerCase(); renderFacings(); });
 
 function renderFacings() {
-  renderChips();
+  renderChips(); renderSolPills();
   const q = fQuery.trim();
   const list = allProducts().filter(p => {
     if (fFilter === "abi" && !p.abi) return false;
@@ -707,8 +736,8 @@ function renderResult() {
       <table class="table">
         <tr><td>DGP packs (étagères, tablettes virtuelles, sol, mobilier)</td><td>${fmtCm(c.dgpPack)}</td></tr>
         <tr><td>DGP cave à bière</td><td>${fmtCm(c.dgpCab)}</td></tr>
-        <tr><td>dont demi-palettes (${c.nbDp})</td><td>${fmtCm(c.dpCm)}</td></tr>
-        <tr><td>dont palettes (${c.nbPal})</td><td>${fmtCm(c.palCm)}</td></tr>
+        <tr><td>dont demi-palettes (${c.totDp}, dont ${c.nbDp} attribuées)</td><td>${fmtCm(c.dpCm)}</td></tr>
+        <tr><td>dont palettes (${c.totPal}, dont ${c.nbPal} attribuées)</td><td>${fmtCm(c.palCm)}</td></tr>
         <tr><td>LD AB InBev packs</td><td>${fmtCm(c.ldPack)}</td></tr>
         <tr><td>LD AB InBev cave à bière</td><td>${fmtCm(c.ldCab)}</td></tr>
         <tr><td><b>PDL = LD / DGP</b></td><td>${fmtCm(c.ld)} / ${fmtCm(c.dgp)}</td></tr>
@@ -720,6 +749,208 @@ function renderResult() {
     </div>`;
   $("#copyDgp").onclick = async () => { try { await navigator.clipboard.writeText(String(Math.round(c.dgp))); toast("DGP copié"); } catch { toast("Copie impossible sur cet appareil"); } };
 }
+
+/* ------------------------------------------------------------------ */
+/* Export PDF                                                          */
+/* ------------------------------------------------------------------ */
+const PDF_LIBS = [
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"
+];
+let pdfLibsReady = null;
+function loadPdfLibs() {
+  if (pdfLibsReady) return pdfLibsReady;
+  pdfLibsReady = PDF_LIBS.reduce((chain, src) => chain.then(() => new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = src; sc.onload = res;
+    sc.onerror = () => rej(new Error("load")); document.head.appendChild(sc);
+  })), Promise.resolve()).catch(e => { pdfLibsReady = null; throw e; });
+  return pdfLibsReady;
+}
+function brandList(c) {
+  let ai = 0, ci = 0;
+  return Object.entries(c.parMarque).sort((a, b) => (b[1].abi - a[1].abi) || (b[1].cm - a[1].cm))
+    .map(([n, v]) => ({ n, ...v, col: v.abi ? ABI_COLORS[ai++ % ABI_COLORS.length] : COMP_COLORS[ci++ % COMP_COLORS.length] }));
+}
+function productLines(c) {
+  const P = REF.params, out = [];
+  for (const p of allProducts()) {
+    const f = num(R.facings[p.id]), d = num(R.dp[p.id]), pa = num(R.pal[p.id]);
+    if (!f && !d && !pa) continue;
+    const cm = f * num(p.largeur) + d * num(P.dp) + pa * num(P.pal);
+    out.push({ p, f, d, pa, cm, pdl: c.dgp ? cm / c.dgp : 0 });
+  }
+  return out.sort((a, b) => (b.p.abi - a.p.abi) || (b.cm - a.cm));
+}
+async function exportPdf() {
+  const c = compute();
+  if (!c.dgp) { toast("Renseignez d'abord le rayon"); return; }
+  const btn = $("#exportPdf"); btn.disabled = true; btn.textContent = "Préparation…";
+  try {
+    await loadPdfLibs();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const T = v => String(v ?? "").replace(/[\u202f\u00a0]/g, " ").replace(/\u2212/g, "-");
+    const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const W = 210, M = 14, INK = [29, 27, 24], MUTED = [107, 103, 95], AMBER = [227, 162, 26];
+    let y = 16;
+    const title = (txt) => {
+      if (y > 262) { doc.addPage(); y = 18; }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...INK);
+      doc.text(T(txt), M, y); y += 5;
+    };
+    const table = (opts) => {
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M }, theme: "plain",
+        styles: { font: "helvetica", fontSize: 9, cellPadding: 1.8, textColor: INK, lineColor: [222, 221, 214], lineWidth: { bottom: 0.2 } },
+        headStyles: { fontStyle: "bold", textColor: MUTED, fillColor: [243, 244, 241] },
+        ...opts,
+        didParseCell: d => {
+          const cs = (opts.columnStyles || {})[d.column.index];
+          if (d.section === "head" && cs && cs.halign) d.cell.styles.halign = cs.halign;
+          if (opts.didParseCell) opts.didParseCell(d);
+        }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    };
+
+    // En-tête
+    doc.setFillColor(...INK); doc.rect(0, 0, W, 30, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+    doc.text("Relevé de part de linéaire bière", M, 13);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+    const dateTxt = R.date ? new Date(R.date + "T12:00:00").toLocaleDateString("fr-FR") : "";
+    doc.text(T(`${R.magasin || "Magasin non renseigné"}  |  Relevé du ${dateTxt}`), M, 21);
+    doc.setTextColor(...AMBER); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
+    doc.text(T(fmtPct(c.pdl)), W - M, 15, { align: "right" });
+    doc.setFontSize(8); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal");
+    doc.text("PDL AB InBev", W - M, 21, { align: "right" });
+    y = 40;
+
+    // Indicateurs
+    const kpis = [
+      [fmtPct(c.pdl), "PDL AB InBev"], [fmtPct(c.pdlPack), "PDL packs"],
+      [c.dgpCab ? fmtPct(c.pdlCab) : "-", "PDL cave à bière"], [String(c.nbElem), `Éléments (équiv. ${REF.params.elemRef} cm)`]
+    ];
+    const kw = (W - 2 * M - 9) / 4;
+    kpis.forEach(([v, l], i) => {
+      const x = M + i * (kw + 3);
+      doc.setDrawColor(222, 221, 214); doc.setFillColor(i === 0 ? 251 : 255, i === 0 ? 240 : 255, i === 0 ? 214 : 255);
+      doc.roundedRect(x, y, kw, 20, 2, 2, "FD");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...INK); doc.text(T(v), x + 4, y + 9);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.text(T(l), x + 4, y + 15.5);
+    });
+    y += 30;
+
+    // DGP SellFi
+    doc.setFillColor(251, 240, 214); doc.roundedRect(M, y, W - 2 * M, 13, 2, 2, "F");
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTED);
+    doc.text("À saisir dans SellFi : DGP rayon bière", M + 4, y + 8);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(...INK);
+    doc.text(`${Math.round(c.dgp)} cm`, W - M - 4, y + 8.5, { align: "right" });
+    y += 22;
+
+    // Rayon vu de face
+    title("Le rayon vu de face");
+    const brands = brandList(c), bw = W - 2 * M;
+    let x = M;
+    doc.setFillColor(236, 236, 232); doc.rect(M, y, bw, 10, "F");
+    brands.forEach(b => { const w = Math.min(bw, b.cm / c.dgp * bw); doc.setFillColor(...rgb(b.col)); doc.rect(x, y, w, 10, "F"); x += w; });
+    doc.setDrawColor(...INK); doc.setLineWidth(0.5); doc.rect(M, y, bw, 10); doc.setLineWidth(0.2);
+    y += 14;
+    const reste = Math.max(0, c.dgp - c.releve);
+    const brandRows = brands.map(b => ["", T(b.n), b.abi ? "Oui" : "Non", T(fmtCm(b.cm)), T(fmtPct(b.cm / c.dgp))]);
+    if (reste > 1) brandRows.push(["", "Non relevé", "", T(fmtCm(reste)), T(fmtPct(reste / c.dgp))]);
+    table({
+      head: [["", "Marque", "AB InBev", "Linéaire", "PDL"]], body: brandRows,
+      columnStyles: { 0: { cellWidth: 6 }, 3: { halign: "right" }, 4: { halign: "right", fontStyle: "bold" } },
+      didDrawCell: d => {
+        if (d.section === "body" && d.column.index === 0 && brands[d.row.index]) {
+          doc.setFillColor(...rgb(brands[d.row.index].col)); doc.rect(d.cell.x + 1.2, d.cell.y + 1.6, 3.2, 3.2, "F");
+        }
+      }
+    });
+
+    // Détail du calcul
+    title("Détail du calcul");
+    table({
+      body: [
+        ["DGP packs (étagères, tablettes virtuelles, sol, mobilier)", T(fmtCm(c.dgpPack))],
+        ["DGP cave à bière", T(fmtCm(c.dgpCab))],
+        [T(`dont demi-palettes (${c.totDp}, dont ${c.nbDp} attribuées)`), T(fmtCm(c.dpCm))],
+        [T(`dont palettes (${c.totPal}, dont ${c.nbPal} attribuées)`), T(fmtCm(c.palCm))],
+        ["DGP total", T(fmtCm(c.dgp))],
+        ["LD AB InBev packs", T(fmtCm(c.ldPack))],
+        ["LD AB InBev cave à bière", T(fmtCm(c.ldCab))],
+        ["LD AB InBev total", T(fmtCm(c.ld))],
+        ["PDL = LD / DGP", T(`${fmtCm(c.ld)} / ${fmtCm(c.dgp)} = ${fmtPct(c.pdl)}`)]
+      ],
+      columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+      didParseCell: d => { if ([4, 7, 8].includes(d.row.index)) d.cell.styles.fontStyle = "bold"; }
+    });
+
+    // Composition du rayon
+    title("Composition du rayon");
+    const segL = { pack: "Packs", cab: "Cave à bière", mixte: "Mixte" };
+    const compo = R.elements.map(g => {
+      const t = elemType(g.typeId);
+      return [T(t.nom), String(num(g.nb)), String(num(g.etag)), T(segL[g.segment] + (g.segment === "mixte" ? ` (${num(g.cabParElem)} CAB)` : "")), String(num(g.virt))];
+    });
+    table({
+      head: [["Type d'élément", "Nombre", "Étagères / élément", "Segment", "Tablettes virtuelles"]], body: compo,
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 4: { halign: "right" } }
+    });
+    const mobRows = R.mobiliers.map(m => { const cat = REF.mobiliers.find(x => x.id === m.mobId) || { nom: "Mobilier supprimé", cm: 0 };
+      return [T(cat.nom), String(num(m.nb)), T(fmtCm(num(cat.cm) * num(m.nb))), m.segment === "cab" ? "Cave à bière" : "Packs", m.abi ? "Oui" : "Non"]; });
+    if (mobRows.length) table({ head: [["Mobilier", "Nombre", "Linéaire", "Segment", "AB InBev"]], body: mobRows, columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } } });
+
+    // PDL par produit
+    title("PDL par produit présent");
+    const lines = productLines(c);
+    const prodRows = lines.map(l => [T(l.p.marque), T(l.p.nom), T(l.p.format), l.p.abi ? "Oui" : "Non",
+      String(l.f || ""), String(l.d || ""), String(l.pa || ""), T(fmtCm(l.cm)), T(fmtPct(l.pdl))]);
+    if (c.naDp || c.naPal) {
+      const cm = c.naDp * num(REF.params.dp) + c.naPal * num(REF.params.pal);
+      prodRows.push(["Sol non attribué", "", "", "Non", "", String(c.naDp || ""), String(c.naPal || ""), T(fmtCm(cm)), T(fmtPct(cm / c.dgp))]);
+    }
+    R.mobiliers.filter(m => m.abi).forEach(m => { const cat = REF.mobiliers.find(x => x.id === m.mobId); if (!cat) return;
+      const cm = num(cat.cm) * num(m.nb); prodRows.push([T(cat.nom), "Mobilier", "", "Oui", "", "", "", T(fmtCm(cm)), T(fmtPct(cm / c.dgp))]); });
+    table({
+      head: [["Marque", "Produit", "Format", "ABI", "Facings", "DP", "Pal.", "Linéaire", "PDL"]],
+      body: prodRows.length ? prodRows : [["Aucun produit saisi", "", "", "", "", "", "", "", ""]],
+      styles: { font: "helvetica", fontSize: 8, cellPadding: 1.6, textColor: INK, lineColor: [222, 221, 214], lineWidth: { bottom: 0.2 } },
+      columnStyles: { 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right", fontStyle: "bold" } },
+      didParseCell: d => { if (d.section === "body" && d.row.raw[3] === "Oui") d.cell.styles.fillColor = [251, 240, 214]; }
+    });
+
+    // Pied de page
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
+      doc.text(T(`PDL rayon bière  |  ${R.magasin || ""}  |  édité le ${new Date().toLocaleDateString("fr-FR")}`), M, 290);
+      doc.text(`${i} / ${n}`, W - M, 290, { align: "right" });
+    }
+
+    const safe = (R.magasin || "magasin").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    await deliverFile(doc.output("blob"), `PDL_${safe}_${R.date || ""}.pdf`);
+  } catch (e) {
+    toast(e && e.message === "load" ? "Connexion nécessaire pour générer le PDF" : "Export PDF impossible");
+  } finally { btn.disabled = false; btn.textContent = "Exporter en PDF"; }
+}
+async function deliverFile(blob, filename) {
+  let dl = null;
+  if (window.claude && window.claude.use) { try { dl = await window.claude.use("downloads"); } catch {} }
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); toast("PDF enregistré"); }
+    catch (e) { if (e && e.code !== "declined") toast("Téléchargement impossible ici"); }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast("PDF téléchargé");
+}
+$("#exportPdf").onclick = exportPdf;
 
 /* Historique */
 async function persistHist() {
@@ -787,10 +1018,12 @@ function renderRef() {
               <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${!isAdmin && !isPublished("produits", p.id) ? `<span class="pill">Ajouté sur ce téléphone</span>` : ""}</div>
             </div>
             <input class="inline" inputmode="decimal" value="${num(p.largeur)}" data-pw aria-label="Largeur en cm" ${ro}><span class="unit" style="font-size:13px;color:var(--muted)">cm</span>
-            ${canEditRef ? `<button class="icon-btn" data-pedit aria-label="Modifier">✎</button>` : ""}
+            ${canEditRef ? `<button class="icon-btn" data-pedit aria-label="Modifier">✎</button><button class="icon-btn" data-pdel aria-label="Retirer">✕</button>` : ""}
           </div>`).join("") || `<div class="empty" style="margin:10px 0">Aucun produit.</div>`}
       </div>
-      <p class="hint">${REF.produits.length} produits · largeur = encombrement d'un facing en façade, en cm.</p>`;
+      <p class="hint">${REF.produits.length} produits · largeur = encombrement d'un facing en façade, en cm.</p>
+      ${(REF.supprimes || []).length ? `<button class="btn small" id="restoreRem">Rétablir les ${REF.supprimes.length} produit(s) retiré(s) du référentiel commun</button>` : ""}`;
+    if ($("#restoreRem")) $("#restoreRem").onclick = restoreRemoved;
     $("#refSearch").oninput = e => { renderRef.q = e.target.value; const pos = e.target.selectionStart; renderRef(); const s = $("#refSearch"); s.focus(); s.setSelectionRange(pos, pos); };
     if (canEditRef) { $("#addProd").onclick = () => productForm(null); $("#pasteProd").onclick = pasteForm; }
   }
@@ -828,13 +1061,6 @@ function renderRef() {
         <div class="field"><label>Élément de référence (cm)</label><input inputmode="decimal" data-pp="elemRef" value="${P.elemRef}" ${ro}></div>
         <div class="field"><label>Étagères par défaut</label><input inputmode="numeric" data-pp="etag" value="${P.etag}" ${ro}></div>
       </div>
-      <h2>Rappel des règles</h2>
-      <details class="rule"><summary>Ce qui entre dans le DGP</summary><p>Tout l'univers bière permanent : packs, canettes, fûts, cave à bière et hard seltzer, même s'ils sont séparés en magasin, ainsi que toutes les tablettes, y compris celles au-dessus de 180 cm. Sont exclus : rayons bio, régionaux et produits du monde, snacking, derrière de caisse, zone promo, verres, tireuses et kits de brassage.</p></details>
-      <details class="rule"><summary>Mobilier</summary><p>Hors univers bière permanent : on ne compte pas. Mobilier magasin dans l'univers : on compte. Mobilier fournisseur : on compte seulement s'il est intégré physiquement au rack bière (hors TG).</p></details>
-      <details class="rule"><summary>Tablette virtuelle</summary><p>Sur une configuration étagère, une hauteur de gerbage d'au moins 4 packs 12x25cl, 3 packs 12x33cl ou 5 packs canettes 12x33cl compte comme une tablette virtuelle, pour toutes les marques. Des produits posés au sol sans support comptent aussi comme une tablette. Canettes sur support avec 4 hauteurs : une tablette virtuelle.</p></details>
-      <details class="rule"><summary>Demi-palettes et palettes</summary><p>Une demi-palette exige un support au sol et 4 hauteurs de gerbage (pack référent : Leffe 12x25cl). Elle compte 180 cm, une palette 360 cm. Une demi-palette posée dans le mauvais sens compte pour deux.</p></details>
-      <details class="rule"><summary>Cave à bière</summary><p>Le DGP CAB regroupe les tablettes du segment cave à bière et le Corner Bosteels s'il est compté. Les bouteilles unitaires implantées ailleurs restent hors CAB. Les packs isolés dans le segment CAB restent en CAB. Élément mixte : chaque étagère rejoint son DGP.</p></details>
-      <details class="rule"><summary>Nombre d'éléments</summary><p>Éléments de 1,33 m + (éléments hors dimension × leur taille) / 1,33 m, arrondi à l'entier le plus proche. Les éléments uniquement promo ne comptent pas.</p></details>
       ${canEditRef ? `<div class="btn-row" style="margin-top:16px"><button class="btn danger" id="resetRef">Revenir au référentiel d'exemple</button></div>` : ""}`;
     if (canEditRef) $("#resetRef").onclick = () => { if (confirm("Remplacer tout le référentiel par les exemples ?")) { REF = { ...structuredClone(DEFAULT_REF), rev: PUBLISHED.rev || 0 }; saveRef(); renderRef(); refreshLive(); } };
   }
@@ -852,6 +1078,7 @@ $("#refBody").addEventListener("click", e => {
   if (!canEditRef) return;
   const rp = e.target.closest("[data-rp]");
   if (rp && e.target.closest("[data-pedit]")) productForm(REF.produits.find(p => p.id === rp.dataset.rp));
+  if (rp && e.target.closest("[data-pdel]")) removeProduct(REF.produits.find(p => p.id === rp.dataset.rp));
   const re = e.target.closest("[data-re]");
   if (re && e.target.closest("[data-edel]")) {
     if (REF.elements.length === 1) { toast("Gardez au moins un type d'élément"); return; }
@@ -860,6 +1087,23 @@ $("#refBody").addEventListener("click", e => {
   const rm = e.target.closest("[data-rm]");
   if (rm && e.target.closest("[data-mdel]")) { REF.mobiliers = REF.mobiliers.filter(x => x.id !== rm.dataset.rm); saveRef(); renderRef(); renderMobs(); refreshLive(); }
 });
+
+function removeProduct(p) {
+  if (!p || !confirm(`Retirer ${p.marque} ${p.nom} ${p.format} du référentiel ?`)) return false;
+  REF.produits = REF.produits.filter(x => x.id !== p.id);
+  if (!isAdmin && isPublished("produits", p.id)) REF.supprimes = [...new Set([...(REF.supprimes || []), p.id])];
+  delete R.facings[p.id]; delete R.dp[p.id]; delete R.pal[p.id];
+  saveRef(); saveDraft(); renderRef(); renderSolPills(); refreshLive();
+  toast("Produit retiré");
+  return true;
+}
+function restoreRemoved() {
+  for (const id of REF.supprimes || []) {
+    const p = (PUBLISHED.produits || []).find(x => x.id === id);
+    if (p && !REF.produits.some(x => x.id === id)) REF.produits.push(structuredClone(p));
+  }
+  REF.supprimes = []; saveRef(); renderRef(); toast("Produits rétablis");
+}
 
 /* Formulaire produit (référentiel ou produit local au relevé) */
 function productForm(p, local = false) {
@@ -908,7 +1152,7 @@ function productForm(p, local = false) {
   };
   if (editing) {
     $("#pDup").onclick = () => { const v = read(); const copy = { id: uid(), ...v, format: v.format + " (copie)" }; REF.produits.push(copy); saveRef(); productForm(copy); renderRef(); };
-    $("#pDel").onclick = () => { if (!confirm(`Supprimer ${p.marque} ${p.nom} ${p.format} ?`)) return; REF.produits = REF.produits.filter(x => x !== p); delete R.facings[p.id]; saveRef(); saveDraft(); $("#dlg").close(); renderRef(); refreshLive(); };
+    $("#pDel").onclick = () => { if (removeProduct(p)) $("#dlg").close(); };
   }
   $("#pCancel").onclick = () => $("#dlg").close();
   $("#dlg").showModal();
@@ -965,7 +1209,7 @@ function buildDocument(ref) {
   return `<!DOCTYPE html>\n<html lang="fr">\n<head>\n${HEAD_TAGS}\n<style id="css">${css}</style>\n</head>\n<body>\n<template id="markup">${markup}</template>\n<${S} id="ref-data" type="application/json">${json}</${S}>\n<${S} id="app">${app}</${S}>\n</body>\n</html>\n`;
 }
 function downloadPage() {
-  const next = { ...JSON.parse(JSON.stringify(REF)), rev: (PUBLISHED.rev || 0) + 1 };
+  const next = { ...JSON.parse(JSON.stringify(REF)), supprimes: [], rev: (PUBLISHED.rev || 0) + 1 };
   const blob = new Blob([buildDocument(next)], { type: "text/html" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = "index.html";
@@ -976,7 +1220,7 @@ function downloadPage() {
 async function publishRef() {
   if (!artifactApi) { downloadPage(); return; }
   const btn = $("#pubGo"); btn.disabled = true; btn.textContent = "Publication…";
-  const next = { ...JSON.parse(JSON.stringify(REF)), rev: (PUBLISHED.rev || 0) + 1 };
+  const next = { ...JSON.parse(JSON.stringify(REF)), supprimes: [], rev: (PUBLISHED.rev || 0) + 1 };
   try {
     await artifactApi.publish(buildDocument(next));
     LS.set("pdl.refDraft", null); refDirty = false;
@@ -1013,6 +1257,8 @@ function applyDraftIfAny() {
   // Nouvelle version du référentiel commun : on la prend et on y rajoute les ajouts faits sur ce téléphone
   if (isAdmin) { LS.set("pdl.refDraft", null); return; }
   const merged = structuredClone(PUBLISHED);
+  merged.supprimes = d.ref.supprimes || [];
+  merged.produits = merged.produits.filter(p => !merged.supprimes.includes(p.id));
   for (const list of ["produits", "elements", "mobiliers"]) {
     for (const item of d.ref[list] || []) if (!isPublished(list, item.id)) merged[list].push(item);
   }
