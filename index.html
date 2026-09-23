@@ -119,7 +119,18 @@ p.hint{margin:0 0 12px;color:var(--muted);font-size:14px}
 .live-nums .big{font:700 34px/1 var(--cond)}
 .live-nums .lbl{font-size:12px;color:var(--muted)}
 .live-nums .mid{font:600 20px/1 var(--cond)}
-nav.tabs{display:grid;grid-template-columns:repeat(4,1fr);max-width:760px;margin:6px auto 0}
+/* Mode simulation : inversion claire de l'interface */
+body.sim{--bg:#14130E;--surface:#211F17;--ink:#F3F0E8;--muted:#A7A195;--line:#3A362C;--amber:#F0B436;--amber-deep:#F6CB6A;--amber-soft:#3A2E12;--hop:#8DC0A2;--hop-soft:#1F3228;background:var(--bg);color:var(--ink)}
+body.sim header.top{background:var(--bg);border-bottom:2px solid var(--amber)}
+body.sim .live{background:var(--surface);border-top:2px solid var(--amber)}
+.mode-pill{display:inline-block;background:var(--amber);color:#14130E;font:700 12px var(--sans);padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:middle}
+.ecart{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:12px;padding:12px 14px;margin-top:10px}
+.ecart.ok{background:#E4F1E7;color:#1E5631}
+.ecart.ko{background:#FBE4E2;color:#9B241C}
+body.sim .ecart.ok{background:#1F3228;color:#9BD5AE}
+body.sim .ecart.ko{background:#3A211F;color:#F3A9A2}
+.ecart b{font:700 24px var(--cond)}
+nav.tabs{display:grid;grid-template-columns:repeat(5,1fr);max-width:760px;margin:6px auto 0}
 nav.tabs button{border:none;background:transparent;padding:10px 4px 12px;font:600 14px var(--sans);color:var(--muted);border-top:3px solid transparent}
 nav.tabs button[aria-current="page"]{color:var(--ink);border-top-color:var(--amber)}
 
@@ -175,7 +186,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <template id="markup">
 <header class="top">
   <div class="top-row">
-    <div class="brand">PDL rayon bière<small id="storeLabel">Nouveau relevé</small></div>
+    <div class="brand">PDL rayon bière<span class="mode-pill" id="modePill" hidden>SIMULATION</span><small id="storeLabel">Nouveau relevé</small></div>
     <div class="sync" id="syncLabel">Hors ligne</div>
   </div>
 </header>
@@ -187,6 +198,20 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="card grid2">
       <div class="field"><label for="magasin">Nom du magasin</label><input id="magasin" placeholder="Ex. Carrefour Vénissieux"></div>
       <div class="field"><label for="date">Date du relevé</label><input id="date" type="date"></div>
+    </div>
+
+    <h2>Objectif</h2>
+    <p class="hint">Objectif de part de linéaire AB InBev pour ce magasin, en pourcentage, en mètres ou en centimètres.</p>
+    <div class="card">
+      <div class="grid2">
+        <div class="field"><label for="objVal">Valeur</label><input id="objVal" inputmode="decimal" placeholder="Ex. 20"></div>
+        <div class="field"><label>Unité</label>
+          <div class="seg" role="group" aria-label="Unité de l'objectif" id="objUnite">
+            <button type="button" data-u="pct">%</button><button type="button" data-u="m">m</button><button type="button" data-u="cm">cm</button>
+          </div>
+        </div>
+      </div>
+      <div id="objRecap"></div>
     </div>
 
     <h2>Éléments du rayon</h2>
@@ -238,6 +263,44 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div id="histList"></div>
   </section>
 
+  <!-- ============ SIMULATION ============ -->
+  <section class="view" id="v-sim" aria-label="Simulation">
+    <h2>Simulation gains et pertes</h2>
+    <p class="hint">Partez d'un point de départ connu (P0), puis ajoutez les facings, demi-palettes et palettes gagnés ou perdus pour voir la PDL qui en résulte. Aucun relevé complet n'est nécessaire.</p>
+
+    <div class="card">
+      <div class="row-head"><h3>Point de départ (P0)</h3><button class="btn small" id="simFromReleve">Reprendre le relevé</button></div>
+      <div class="grid2">
+        <div class="field"><label for="simDgp">DGP du rayon</label><input id="simDgp" inputmode="decimal" placeholder="Ex. 4400"></div>
+        <div class="field"><label>Unité</label>
+          <div class="seg" role="group" aria-label="Unité du DGP" id="simUnite">
+            <button type="button" data-su="cm">cm</button><button type="button" data-su="m">m</button>
+          </div>
+        </div>
+        <div class="field"><label for="simPdl">PDL AB InBev de départ (%)</label><input id="simPdl" inputmode="decimal" placeholder="Ex. 15,3"></div>
+        <div class="field"><label>Soit un LD de départ</label><div id="simLd0" style="min-height:44px;display:flex;align-items:center;font:700 20px var(--cond)">0 cm</div></div>
+      </div>
+    </div>
+
+    <h2>Facings gagnés ou perdus</h2>
+    <p class="hint">Un gain se saisit en positif, une perte en négatif. Le DGP ne bouge pas : c'est un échange de place avec la concurrence.</p>
+    <div id="simList"></div>
+    <button class="btn amber" id="addMvt" style="width:100%">+ Ajouter un produit</button>
+
+    <h2>Au sol gagné ou perdu</h2>
+    <p class="hint">Une demi-palette ou une palette gagnée s'ajoute au linéaire AB InBev et au DGP du rayon.</p>
+    <div class="card">
+      <div class="grid2">
+        <div class="field"><label>Demi-palettes</label><div data-simbind="dp"></div></div>
+        <div class="field"><label>Palettes</label><div data-simbind="pal"></div></div>
+      </div>
+    </div>
+
+    <h2>Résultat de la simulation</h2>
+    <div id="simRes"></div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn" id="simReset">Réinitialiser la simulation</button></div>
+  </section>
+
   <!-- ============ RÉFÉRENTIEL ============ -->
   <section class="view" id="v-ref" aria-label="Référentiel">
     <h2>Référentiel</h2>
@@ -258,7 +321,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 <div class="live">
   <div class="live-inner">
-    <div class="live-nums">
+    <div class="live-nums" id="simLive" hidden>
+      <div><div class="big" id="simLiveP">0,0 %</div><div class="lbl">PDL simulée</div></div>
+      <div><div class="mid" id="simLiveD">0,0 pt</div><div class="lbl">Écart vs P0</div></div>
+      <div><div class="mid" id="simLiveL">0 cm</div><div class="lbl">LD simulé</div></div>
+    </div>
+    <div class="live-nums" id="liveNums">
       <div><div class="big" id="liveP">0,0 %</div><div class="lbl">PDL AB InBev</div></div>
       <div><div class="mid" id="liveD">0 cm</div><div class="lbl">DGP rayon</div></div>
       <div><div class="mid" id="liveL">0 cm</div><div class="lbl">LD AB InBev</div></div>
@@ -268,7 +336,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button data-goto="rayon" aria-current="page">Rayon</button>
     <button data-goto="facings">Facings</button>
     <button data-goto="resultat">Résultat</button>
-    <button data-goto="ref">Référentiel</button>
+    <button data-goto="sim">Simulation</button>
+    <button data-goto="ref">Réf.</button>
   </nav>
 </div>
 
@@ -418,7 +487,7 @@ const DEFAULT_REF = {
 const newReleve = () => ({
   id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
   elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0, dp: 0, pal: 0 }],
-  dpTotal: 0, palTotal: 0, dp: {}, pal: {},
+  dpTotal: 0, palTotal: 0, dp: {}, pal: {}, objectif: LS.get("pdl.objectif", { valeur: 0, unite: "pct" }),
   mobiliers: [], facings: {}, locaux: []
 });
 
@@ -438,12 +507,15 @@ function migrate(r) {
   if (!r.dp || "total" in r.dp) r.dp = {};
   if (!r.pal || "total" in r.pal) r.pal = {};
   r.locaux = r.locaux || []; r.facings = r.facings || {};
+  r.objectif = r.objectif || LS.get("pdl.objectif", { valeur: 0, unite: "pct" });
   const sum = o => Object.values(o).reduce((a, b) => a + (Number(b) || 0), 0);
   if (typeof r.dpTotal !== "number") r.dpTotal = sum(r.dp);
   if (typeof r.palTotal !== "number") r.palTotal = sum(r.pal);
   return r;
 }
 let HIST = LS.get("pdl.hist", []);
+let SIM = LS.get("pdl.sim", null) || { dgp0: 0, unite: "cm", pdl0: 0, mvts: [], dp: 0, pal: 0 };
+function saveSim() { LS.set("pdl.sim", SIM); }
 let canEditRef = REFERENTIEL_MODIFIABLE_PAR_TOUS;
 let isAdmin = false;        // auteur sur claude.ai, ou lien ?admin hors claude.ai
 let artifactApi = null;
@@ -546,13 +618,17 @@ function readKey(key) {
   if (scope === "r") return getPath(R, a);
   if (scope === "el") return R.elements.find(x => x.id === a)?.[b];
   if (scope === "mob") return R.mobiliers.find(x => x.id === a)?.[b];
+  if (scope === "sim") return SIM[a] || 0;
+  if (scope === "mvt") return (SIM.mvts.find(x => x.id === a) || {}).delta || 0;
   if (scope === "f") return R.facings[a] || 0;
   if (scope === "dp") return R.dp[a] || 0;
   if (scope === "pal") return R.pal[a] || 0;
 }
 function writeKey(key, v) {
-  v = Math.max(0, v);
   const [scope, a, b] = key.split(":");
+  if (scope !== "sim" && scope !== "mvt") v = Math.max(0, v);
+  if (scope === "sim") { SIM[a] = v; saveSim(); renderSimRes(); return; }
+  if (scope === "mvt") { const m = SIM.mvts.find(x => x.id === a); if (m) m.delta = v; saveSim(); renderSimRes(); return; }
   if (scope === "r") setPath(R, a, v);
   else if (scope === "el") { const g = R.elements.find(x => x.id === a); if (g) g[b] = v; }
   else if (scope === "mob") { const m = R.mobiliers.find(x => x.id === a); if (m) m[b] = v; }
@@ -594,6 +670,12 @@ function show(v) {
   if (v === "facings") renderFacings();
   if (v === "resultat") { renderResult(); renderHist(); }
   if (v === "ref") renderRef();
+  if (v === "sim") renderSim();
+  document.body.classList.toggle("sim", v === "sim");
+  $("#modePill").hidden = v !== "sim";
+  $("#liveNums").hidden = v === "sim";
+  $("#simLive").hidden = v !== "sim";
+  if (v === "sim") renderSimRes();
   window.scrollTo({ top: 0 });
 }
 
@@ -604,7 +686,8 @@ function renderRayon() {
   $("#magasin").value = R.magasin; $("#date").value = R.date;
   $("#storeLabel").textContent = R.magasin || "Nouveau relevé";
   document.querySelectorAll("[data-bind]").forEach(el => { el.innerHTML = stepperHTML(getPath(R, el.dataset.bind), "r:" + el.dataset.bind); });
-  renderElems(); renderMobs(); renderSolPills(); refreshLive();
+  renderElems(); renderMobs(); renderSolPills(); renderObjectif(); refreshLive();
+  updateLd0();
 }
 function hasSol(id) { return !!(R.dp[id] || R.pal[id]); }
 function renderSolPills() {
@@ -714,7 +797,9 @@ $("#date").addEventListener("input", e => { R.date = e.target.value; saveDraft()
 /* ------------------------------------------------------------------ */
 /* Vue Facings                                                         */
 /* ------------------------------------------------------------------ */
-const FILTERS = [["tout","Tout"],["abi","AB InBev"],["conc","Concurrence"],["pack","Packs"],["cab","Cave à bière"],["saisis","Déjà saisis"]];
+const FILTERS = [["tout","Tout"],["abi","AB InBev"],["conc","Concurrence"],["pack","Packs"],["cab","Cave à bière"],["can","CAN"],["nab","NAB"],["saisis","Déjà saisis"]];
+const isCan = p => /^can\b/i.test(String(p.format || ""));
+const isNab = p => /0\s*[,.]\s*0/.test(`${p.nom || ""} ${p.format || ""}`);
 function renderChips() {
   $("#fChips").innerHTML = FILTERS.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fFilter === k}">${l}</button>`).join("");
 }
@@ -729,6 +814,8 @@ function renderFacings() {
     if (fFilter === "conc" && p.abi) return false;
     if (fFilter === "pack" && p.segment !== "pack") return false;
     if (fFilter === "cab" && p.segment !== "cab") return false;
+    if (fFilter === "can" && !isCan(p)) return false;
+    if (fFilter === "nab" && !isNab(p)) return false;
     if (fFilter === "saisis" && !R.facings[p.id] && !hasSol(p.id)) return false;
     if (q && !`${p.marque} ${p.nom} ${p.format}`.toLowerCase().includes(q)) return false;
     return true;
@@ -785,12 +872,42 @@ $("#addLocalProd").onclick = () => productForm(null, true);
 /* ------------------------------------------------------------------ */
 const ABI_COLORS = ["#E3A21A","#C7850B","#F2C766","#9A6A06","#F5D98E","#B8791A"];
 const COMP_COLORS = ["#7D8187","#A3A7AC","#5F6368","#C2C5C9","#8E9398","#6F7378"];
+function objectifCm(dgp) {
+  const o = R.objectif || {}; const v = num(o.valeur);
+  if (!v) return 0;
+  return o.unite === "pct" ? (v / 100) * dgp : o.unite === "m" ? v * 100 : v;
+}
+function ecartHTML(ld, dgp) {
+  const cible = objectifCm(dgp); if (!cible) return "";
+  const e = ld - cible, ok = e >= 0;
+  const abs = Math.abs(e);
+  const detail = `${fmtCm(abs)} (${(abs / 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m)`;
+  return `<div class="ecart ${ok ? "ok" : "ko"}">
+    <div><div style="font-size:13px;opacity:.85">Objectif : ${fmtCm(cible)}${R.objectif.unite === "pct" ? ` (${num(R.objectif.valeur).toLocaleString("fr-FR")} % du DGP)` : ""}</div>
+    <div style="font-weight:600">${ok ? "Objectif atteint" : "Objectif non atteint"}</div></div>
+    <b>${ok ? "+" : "-"} ${detail}</b>
+  </div>`;
+}
+function renderObjectif() {
+  const o = R.objectif || { valeur: 0, unite: "pct" };
+  const inp = $("#objVal"); if (document.activeElement !== inp) inp.value = o.valeur || "";
+  document.querySelectorAll("#objUnite [data-u]").forEach(b => b.setAttribute("aria-pressed", b.dataset.u === o.unite));
+  const c = compute();
+  $("#objRecap").innerHTML = num(o.valeur) ? (c.dgp ? ecartHTML(c.ld, c.dgp) : `<p class="hint" style="margin:10px 0 0">L'écart s'affichera dès que le rayon sera renseigné.</p>`) : "";
+}
+$("#objVal").addEventListener("input", e => { R.objectif = { ...R.objectif, valeur: num(e.target.value) }; LS.set("pdl.objectif", R.objectif); saveDraft(); renderObjectif(); refreshLive(); });
+$("#objUnite").addEventListener("click", e => { const b = e.target.closest("[data-u]"); if (!b) return; R.objectif = { ...R.objectif, unite: b.dataset.u }; LS.set("pdl.objectif", R.objectif); saveDraft(); renderObjectif(); refreshLive(); });
+
 function refreshLive() {
   const c = compute();
   $("#liveP").textContent = fmtPct(c.pdl);
   $("#liveD").textContent = fmtCm(c.dgp);
   $("#liveL").textContent = fmtCm(c.ld);
+  const cible = objectifCm(c.dgp);
+  const lp = $("#liveP");
+  lp.style.color = cible ? (c.ld >= cible ? "#1E7A3C" : "#B3261E") : "";
   if ($("#v-resultat").classList.contains("on")) renderResult();
+  if ($("#v-rayon").classList.contains("on")) renderObjectif();
 }
 function renderResult() {
   const c = compute();
@@ -802,6 +919,7 @@ function renderResult() {
   const over = c.releve - c.dgp > 1;
   $("#resBody").innerHTML = `
     ${over ? `<div class="warn">Les facings saisis dépassent le DGP de ${fmtCm(c.releve - c.dgp)}. Vérifiez le nombre d'étagères ou les largeurs produits.</div>` : ""}
+    ${ecartHTML(c.ld, c.dgp)}
     <div class="kpis">
       <div class="kpi hero"><div class="n">${fmtPct(c.pdl)}</div><div class="t">Part de linéaire AB InBev · ${esc(R.magasin || "magasin non renseigné")}</div></div>
       <div class="kpi"><div class="n">${fmtPct(c.pdlPack)}</div><div class="t">PDL packs</div></div>
@@ -841,6 +959,100 @@ function renderResult() {
     </div>`;
   $("#copyDgp").onclick = async () => { try { await navigator.clipboard.writeText(String(Math.round(c.dgp))); toast("DGP copié"); } catch { toast("Copie impossible sur cet appareil"); } };
 }
+
+/* ------------------------------------------------------------------ */
+/* Simulation gains et pertes                                          */
+/* ------------------------------------------------------------------ */
+function simCompute() {
+  const P = REF.params;
+  const dgp0 = SIM.unite === "m" ? num(SIM.dgp0) * 100 : num(SIM.dgp0);
+  const ld0 = (num(SIM.pdl0) / 100) * dgp0;
+  let dFacings = 0;
+  for (const m of SIM.mvts) {
+    const p = allProducts().find(x => x.id === m.prodId); if (!p) continue;
+    dFacings += num(m.delta) * num(p.largeur);
+  }
+  const dSol = num(SIM.dp) * num(P.dp) + num(SIM.pal) * num(P.pal);
+  const dgp = dgp0 + dSol, ld = ld0 + dFacings + dSol;
+  return { dgp0, ld0, pdl0: dgp0 ? ld0 / dgp0 : 0, dgp, ld, pdl: dgp ? ld / dgp : 0, dFacings, dSol };
+}
+function renderSim() {
+  const d = $("#simDgp"); if (document.activeElement !== d) d.value = SIM.dgp0 || "";
+  const q = $("#simPdl"); if (document.activeElement !== q) q.value = SIM.pdl0 || "";
+  document.querySelectorAll("#simUnite [data-su]").forEach(b => b.setAttribute("aria-pressed", b.dataset.su === SIM.unite));
+  document.querySelectorAll("[data-simbind]").forEach(el => { el.innerHTML = stepperHTML(SIM[el.dataset.simbind], "sim:" + el.dataset.simbind); });
+  const opts = sel => allProducts().slice().sort((a, b) => (b.abi - a.abi) || a.marque.localeCompare(b.marque, "fr"))
+    .map(p => `<option value="${p.id}" ${p.id === sel ? "selected" : ""}>${esc(p.marque)} ${esc(p.nom)} · ${esc(p.format)} (${num(p.largeur).toLocaleString("fr-FR")} cm)</option>`).join("");
+  $("#simList").innerHTML = SIM.mvts.map(m => {
+    const p = allProducts().find(x => x.id === m.prodId);
+    const cm = p ? num(m.delta) * num(p.largeur) : 0;
+    return `<div class="card" data-mvt="${m.id}">
+      <div class="row-head">
+        <select data-mvtprod aria-label="Produit" style="flex:1;min-width:0;max-width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:8px 10px;min-height:44px">${opts(m.prodId)}</select>
+        <button class="icon-btn" data-delmvt aria-label="Supprimer">✕</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        ${stepperHTML(m.delta, "mvt:" + m.id)}
+        <span style="font:600 18px var(--cond);color:${cm >= 0 ? "var(--hop)" : "var(--danger)"}">${cm >= 0 ? "+" : "-"} ${fmtCm(Math.abs(cm))}</span>
+      </div>
+    </div>`;
+  }).join("") || `<div class="empty">Aucun mouvement. Ajoutez un produit gagné ou perdu.</div>`;
+  renderSimRes();
+}
+function renderSimRes() {
+  const box = $("#simRes"); if (!box) return;
+  const c = simCompute();
+  if (!c.dgp0) { box.innerHTML = `<div class="empty">Renseignez d'abord le DGP et la PDL de départ.</div>`; $("#simLiveP").textContent = "0,0 %"; return; }
+  const pts = (c.pdl - c.pdl0) * 100, gagne = pts >= 0;
+  $("#simLiveP").textContent = fmtPct(c.pdl);
+  $("#simLiveP").style.color = gagne ? "#8DC0A2" : "#F3A9A2";
+  $("#simLiveD").textContent = `${gagne ? "+" : "-"} ${Math.abs(pts).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pt`;
+  $("#simLiveL").textContent = fmtCm(c.ld);
+  const dLd = c.ld - c.ld0;
+  box.innerHTML = `
+    <div class="kpis">
+      <div class="kpi hero"><div class="n" style="color:${gagne ? "#8DC0A2" : "#F3A9A2"}">${fmtPct(c.pdl)}</div><div class="t">PDL simulée, contre ${fmtPct(c.pdl0)} au départ</div></div>
+      <div class="kpi"><div class="n" style="color:${gagne ? "var(--hop)" : "var(--danger)"}">${gagne ? "+" : "-"}${Math.abs(pts).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pt</div><div class="t">Écart de PDL</div></div>
+      <div class="kpi"><div class="n">${dLd >= 0 ? "+" : "-"}${fmtCm(Math.abs(dLd))}</div><div class="t">Linéaire AB InBev</div></div>
+      <div class="kpi"><div class="n">${fmtCm(c.dgp)}</div><div class="t">DGP après mouvements</div></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <table class="table">
+        <tr><td>LD de départ</td><td>${fmtCm(c.ld0)}</td></tr>
+        <tr><td>Facings gagnés ou perdus</td><td>${c.dFacings >= 0 ? "+" : "-"}${fmtCm(Math.abs(c.dFacings))}</td></tr>
+        <tr><td>Demi-palettes et palettes</td><td>${c.dSol >= 0 ? "+" : "-"}${fmtCm(Math.abs(c.dSol))}</td></tr>
+        <tr><td><b>LD simulé</b></td><td>${fmtCm(c.ld)}</td></tr>
+      </table>
+      ${ecartHTML(c.ld, c.dgp)}
+    </div>`;
+}
+$("#simDgp").addEventListener("input", e => { SIM.dgp0 = num(e.target.value); saveSim(); renderSimRes(); updateLd0(); });
+$("#simPdl").addEventListener("input", e => { SIM.pdl0 = num(e.target.value); saveSim(); renderSimRes(); updateLd0(); });
+function updateLd0() { const c = simCompute(); $("#simLd0").textContent = fmtCm(c.ld0); }
+$("#simUnite").addEventListener("click", e => { const b = e.target.closest("[data-su]"); if (!b) return; SIM.unite = b.dataset.su; saveSim(); renderSim(); updateLd0(); });
+$("#simFromReleve").onclick = () => {
+  const c = compute();
+  if (!c.dgp) { toast("Aucun relevé en cours"); return; }
+  SIM.dgp0 = Math.round(c.dgp); SIM.unite = "cm"; SIM.pdl0 = Math.round(c.pdl * 1000) / 10;
+  saveSim(); renderSim(); updateLd0(); toast("Point de départ repris du relevé");
+};
+$("#addMvt").onclick = () => {
+  const first = allProducts().find(p => p.abi) || allProducts()[0];
+  if (!first) { toast("Aucun produit au référentiel"); return; }
+  SIM.mvts.push({ id: uid(), prodId: first.id, delta: 1 }); saveSim(); renderSim();
+};
+$("#simList").addEventListener("change", e => {
+  const card = e.target.closest("[data-mvt]"); if (!card || !e.target.matches("[data-mvtprod]")) return;
+  const m = SIM.mvts.find(x => x.id === card.dataset.mvt); m.prodId = e.target.value; saveSim(); renderSim();
+});
+$("#simList").addEventListener("click", e => {
+  const card = e.target.closest("[data-mvt]"); if (!card || !e.target.closest("[data-delmvt]")) return;
+  SIM.mvts = SIM.mvts.filter(x => x.id !== card.dataset.mvt); saveSim(); renderSim();
+});
+$("#simReset").onclick = () => {
+  if (!confirm("Effacer le point de départ et tous les mouvements ?")) return;
+  SIM = { dgp0: 0, unite: "cm", pdl0: 0, mvts: [], dp: 0, pal: 0 }; saveSim(); renderSim(); updateLd0();
+};
 
 /* ------------------------------------------------------------------ */
 /* Export PDF                                                          */
@@ -974,7 +1186,8 @@ async function exportPdf() {
         ["LD AB InBev packs", T(fmtCm(c.ldPack))],
         ["LD AB InBev cave à bière", T(fmtCm(c.ldCab))],
         ["LD AB InBev total", T(fmtCm(c.ld))],
-        ["PDL = LD / DGP", T(`${fmtCm(c.ld)} / ${fmtCm(c.dgp)} = ${fmtPct(c.pdl)}`)]
+        ["PDL = LD / DGP", T(`${fmtCm(c.ld)} / ${fmtCm(c.dgp)} = ${fmtPct(c.pdl)}`)],
+        ...(objectifCm(c.dgp) ? [["Objectif", T(`${fmtCm(objectifCm(c.dgp))}, écart ${c.ld - objectifCm(c.dgp) >= 0 ? "+" : "-"}${fmtCm(Math.abs(c.ld - objectifCm(c.dgp)))}`)]] : [])
       ],
       columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
       didParseCell: d => { if ([4, 7, 8].includes(d.row.index)) d.cell.styles.fontStyle = "bold"; }
