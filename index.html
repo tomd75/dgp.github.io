@@ -197,6 +197,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <h2>Magasin</h2>
     <div class="card grid2">
       <div class="field"><label for="magasin">Nom du magasin</label><input id="magasin" placeholder="Ex. Carrefour Vénissieux"></div>
+      <div class="field"><label for="m1">Nom du M1</label><input id="m1" placeholder="Qui fait le relevé"></div>
       <div class="field"><label for="date">Date du relevé</label><input id="date" type="date"></div>
     </div>
 
@@ -298,7 +299,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
     <h2>Résultat de la simulation</h2>
     <div id="simRes"></div>
-    <div class="btn-row" style="margin-top:12px"><button class="btn" id="simReset">Réinitialiser la simulation</button></div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn amber" id="simPdf" style="flex:1">Exporter la simulation en PDF</button><button class="btn" id="simReset">Réinitialiser</button></div>
   </section>
 
   <!-- ============ RÉFÉRENTIEL ============ -->
@@ -361,6 +362,12 @@ const HEAD_TAGS = "<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" con
 /* Données par défaut                                                  */
 /* ------------------------------------------------------------------ */
 const uid = () => Math.random().toString(36).slice(2, 10);
+// Conditionnement et sans alcool : déduits du format et du nom quand ils ne sont pas renseignés
+const devineContenant = f => /^can\b/i.test(String(f || "")) ? "can" : "bouteille";
+const devineNab = (n, f) => /0\s*[,.]\s*0|\bnab\b|\bcero\b|\bzero\b/i.test(`${n || ""} ${f || ""}`);
+const estCan = p => (p.contenant || devineContenant(p.format)) === "can";
+const estNab = p => p.nab === undefined ? devineNab(p.nom, p.format) : !!p.nab;
+
 // Identifiant stable par SKU (marque + produit + format) : les relevés gardent leurs facings d'une ouverture à l'autre
 function skuId(m, p, f) { return "sku-" + `${m}|${p}|${f}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"); }
 const DEFAULT_REF = {
@@ -480,12 +487,12 @@ const DEFAULT_REF = {
     ["Tripel Karmeliet", "Originale", "Coffret 4x33cl", 12.5, "pack", true],
     ["Tripel Karmeliet", "0,0", "4x33cl", 12.0, "pack", true],
     ["Victoria", "Originale", "75cl", 8.4, "cab", true]
-  ].map(([marque,nom,format,largeur,segment,abi]) => ({ id: skuId(marque, nom, format), marque, nom, format, largeur, segment, abi })),
+  ].map(([marque,nom,format,largeur,segment,abi]) => ({ id: skuId(marque, nom, format), marque, nom, format, largeur, segment, abi, contenant: devineContenant(format), nab: devineNab(nom, format) })),
   exemple: false,
   rev: 1
 };
 const newReleve = () => ({
-  id: uid(), magasin: "", date: new Date().toISOString().slice(0,10),
+  id: uid(), magasin: "", m1: LS.get("pdl.m1", ""), date: new Date().toISOString().slice(0,10),
   elements: [{ id: uid(), typeId: "e133", nb: 1, etag: 5, segment: "pack", cabParElem: 0, virt: 0, dp: 0, pal: 0 }],
   dpTotal: 0, palTotal: 0, dp: {}, pal: {}, objectif: LS.get("pdl.objectif", { valeur: 0, unite: "pct" }),
   mobiliers: [], facings: {}, locaux: []
@@ -643,7 +650,9 @@ document.addEventListener("click", e => {
   if (st) {
     const key = st.dataset.key, v = num(readKey(key)) + num(st.dataset.step);
     writeKey(key, v);
-    const inp = st.parentElement.querySelector("input"); inp.value = Math.max(0, v);
+    const neg = /^(sim|mvt):/.test(key);
+    const inp = st.parentElement.querySelector("input"); inp.value = neg ? v : Math.max(0, v);
+    if (key.startsWith("mvt:")) majMvt(key.slice(4));
     if (/^(f|dp|pal):/.test(key)) updateFacingRow(key.split(":")[1]);
     if (!/^(f|dp|pal):/.test(key)) renderSolPills();
     if (/^el:.*:(dp|pal)$/.test(key)) renderElems();
@@ -683,7 +692,7 @@ function show(v) {
 /* Vue Rayon                                                           */
 /* ------------------------------------------------------------------ */
 function renderRayon() {
-  $("#magasin").value = R.magasin; $("#date").value = R.date;
+  $("#magasin").value = R.magasin; $("#date").value = R.date; $("#m1").value = R.m1 || "";
   $("#storeLabel").textContent = R.magasin || "Nouveau relevé";
   document.querySelectorAll("[data-bind]").forEach(el => { el.innerHTML = stepperHTML(getPath(R, el.dataset.bind), "r:" + el.dataset.bind); });
   renderElems(); renderMobs(); renderSolPills(); renderObjectif(); refreshLive();
@@ -793,13 +802,13 @@ $("#addMob").onclick = () => {
 };
 $("#magasin").addEventListener("input", e => { R.magasin = e.target.value; $("#storeLabel").textContent = R.magasin || "Nouveau relevé"; saveDraft(); });
 $("#date").addEventListener("input", e => { R.date = e.target.value; saveDraft(); });
+$("#m1").addEventListener("input", e => { R.m1 = e.target.value; LS.set("pdl.m1", R.m1); saveDraft(); });
 
 /* ------------------------------------------------------------------ */
 /* Vue Facings                                                         */
 /* ------------------------------------------------------------------ */
-const FILTERS = [["tout","Tout"],["abi","AB InBev"],["conc","Concurrence"],["pack","Packs"],["cab","Cave à bière"],["can","CAN"],["nab","NAB"],["saisis","Déjà saisis"]];
-const isCan = p => /^can\b/i.test(String(p.format || ""));
-const isNab = p => /0\s*[,.]\s*0/.test(`${p.nom || ""} ${p.format || ""}`);
+const FILTERS = [["tout","Tout"],["abi","AB InBev"],["conc","Concurrence"],["cab","Cave à bière"],["can","CAN"],["nab","NAB"],["saisis","Déjà saisis"]];
+
 function renderChips() {
   $("#fChips").innerHTML = FILTERS.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="${fFilter === k}">${l}</button>`).join("");
 }
@@ -812,10 +821,9 @@ function renderFacings() {
   const list = allProducts().filter(p => {
     if (fFilter === "abi" && !p.abi) return false;
     if (fFilter === "conc" && p.abi) return false;
-    if (fFilter === "pack" && p.segment !== "pack") return false;
     if (fFilter === "cab" && p.segment !== "cab") return false;
-    if (fFilter === "can" && !isCan(p)) return false;
-    if (fFilter === "nab" && !isNab(p)) return false;
+    if (fFilter === "can" && !estCan(p)) return false;
+    if (fFilter === "nab" && !estNab(p)) return false;
     if (fFilter === "saisis" && !R.facings[p.id] && !hasSol(p.id)) return false;
     if (q && !`${p.marque} ${p.nom} ${p.format}`.toLowerCase().includes(q)) return false;
     return true;
@@ -834,7 +842,7 @@ function renderFacings() {
           <div class="prod-main">
             <div class="info">
               <div class="name">${esc(p.format)}</div>
-              <div class="meta">${esc(p.nom)} · ${num(p.largeur).toLocaleString("fr-FR")} cm ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${p.local ? `<span class="pill">Ajouté sur ce relevé</span>` : ""}</div>
+              <div class="meta">${esc(p.nom)} · ${num(p.largeur).toLocaleString("fr-FR")} cm ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${estCan(p) ? `<span class="pill">CAN</span>` : ""} ${estNab(p) ? `<span class="pill">NAB</span>` : ""} ${p.local ? `<span class="pill">Ajouté sur ce relevé</span>` : ""}</div>
             </div>
             ${stepperHTML(R.facings[p.id], "f:" + p.id)}
           </div>
@@ -993,11 +1001,19 @@ function renderSim() {
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         ${stepperHTML(m.delta, "mvt:" + m.id)}
-        <span style="font:600 18px var(--cond);color:${cm >= 0 ? "var(--hop)" : "var(--danger)"}">${cm >= 0 ? "+" : "-"} ${fmtCm(Math.abs(cm))}</span>
+        <span data-mvtcm style="font:600 18px var(--cond);color:${cm >= 0 ? "var(--hop)" : "var(--danger)"}">${cm >= 0 ? "+" : "-"} ${fmtCm(Math.abs(cm))}</span>
       </div>
     </div>`;
   }).join("") || `<div class="empty">Aucun mouvement. Ajoutez un produit gagné ou perdu.</div>`;
   renderSimRes();
+}
+function majMvt(id) {
+  const m = SIM.mvts.find(x => x.id === id); if (!m) return;
+  const row = document.querySelector(`[data-mvt="${id}"] [data-mvtcm]`); if (!row) return;
+  const p = allProducts().find(x => x.id === m.prodId);
+  const cm = p ? num(m.delta) * num(p.largeur) : 0;
+  row.textContent = `${cm >= 0 ? "+" : "-"} ${fmtCm(Math.abs(cm))}`;
+  row.style.color = cm >= 0 ? "var(--hop)" : "var(--danger)";
 }
 function renderSimRes() {
   const box = $("#simRes"); if (!box) return;
@@ -1123,7 +1139,7 @@ async function exportPdf() {
     doc.text("Relevé de part de linéaire bière", M, 13);
     doc.setFont("helvetica", "normal"); doc.setFontSize(10);
     const dateTxt = R.date ? new Date(R.date + "T12:00:00").toLocaleDateString("fr-FR") : "";
-    doc.text(T(`${R.magasin || "Magasin non renseigné"}  |  Relevé du ${dateTxt}`), M, 21);
+    doc.text(T(`${R.magasin || "Magasin non renseigné"}  |  Relevé du ${dateTxt}${R.m1 ? `  |  ${R.m1}` : ""}`), M, 21);
     doc.setTextColor(...AMBER); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
     doc.text(T(fmtPct(c.pdl)), W - M, 15, { align: "right" });
     doc.setFontSize(8); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal");
@@ -1241,6 +1257,115 @@ async function exportPdf() {
     toast(e && e.message === "load" ? "Connexion nécessaire pour générer le PDF" : "Export PDF impossible");
   } finally { btn.disabled = false; btn.textContent = "Exporter en PDF"; }
 }
+async function exportSimPdf() {
+  const c = simCompute();
+  if (!c.dgp0) { toast("Renseignez d'abord le point de départ"); return; }
+  const btn = $("#simPdf"); btn.disabled = true; btn.textContent = "Préparation…";
+  try {
+    await loadPdfLibs();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const T = v => String(v ?? "").replace(/[\u202f\u00a0]/g, " ").replace(/\u2212/g, "-");
+    const W = 210, M = 14, INK = [29, 27, 24], MUTED = [107, 103, 95], AMBER = [227, 162, 26];
+    const VERT = [30, 122, 60], ROUGE = [179, 38, 30];
+    const pts = (c.pdl - c.pdl0) * 100, gagne = pts >= 0;
+    let y = 40;
+
+    doc.setFillColor(...INK); doc.rect(0, 0, W, 30, "F");
+    doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+    doc.text("Simulation gains et pertes", M, 13);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+    doc.text(T(`${R.magasin || "Magasin non renseigné"}${R.m1 ? `  |  ${R.m1}` : ""}  |  ${new Date().toLocaleDateString("fr-FR")}`), M, 21);
+    doc.setTextColor(...AMBER); doc.setFont("helvetica", "bold"); doc.setFontSize(22);
+    doc.text(T(fmtPct(c.pdl)), W - M, 15, { align: "right" });
+    doc.setFontSize(8); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal");
+    doc.text("PDL simulée", W - M, 21, { align: "right" });
+
+    const kpis = [
+      [fmtPct(c.pdl0), "PDL de départ", INK],
+      [fmtPct(c.pdl), "PDL simulée", gagne ? VERT : ROUGE],
+      [`${gagne ? "+" : "-"}${Math.abs(pts).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pt`, "Écart de PDL", gagne ? VERT : ROUGE],
+      [fmtCm(c.dgp), "DGP après mouvements", INK]
+    ];
+    const kw = (W - 2 * M - 9) / 4;
+    kpis.forEach(([v, l, col], i) => {
+      const x = M + i * (kw + 3);
+      doc.setDrawColor(222, 221, 214); doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x, y, kw, 20, 2, 2, "FD");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(...col); doc.text(T(v), x + 4, y + 9);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.text(T(l), x + 4, y + 15.5);
+    });
+    y += 30;
+
+    const table = (opts) => {
+      doc.autoTable({
+        startY: y, margin: { left: M, right: M }, theme: "plain",
+        styles: { font: "helvetica", fontSize: 9, cellPadding: 1.8, textColor: INK, lineColor: [222, 221, 214], lineWidth: { bottom: 0.2 } },
+        headStyles: { fontStyle: "bold", textColor: MUTED, fillColor: [243, 244, 241] },
+        ...opts,
+        didParseCell: d => {
+          const cs = (opts.columnStyles || {})[d.column.index];
+          if (d.section === "head" && cs && cs.halign) d.cell.styles.halign = cs.halign;
+          if (opts.didParseCell) opts.didParseCell(d);
+        }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    };
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(...INK);
+    doc.text("Point de départ", M, y); y += 5;
+    table({ body: [["DGP du rayon", T(fmtCm(c.dgp0))], ["PDL AB InBev", T(fmtPct(c.pdl0))], ["Linéaire AB InBev", T(fmtCm(c.ld0))]],
+      columnStyles: { 1: { halign: "right", fontStyle: "bold" } } });
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text("Mouvements simulés", M, y); y += 5;
+    const rows = SIM.mvts.map(m => {
+      const p = allProducts().find(x => x.id === m.prodId); if (!p) return null;
+      const cm = num(m.delta) * num(p.largeur);
+      return [T(p.marque), T(p.nom), T(p.format), (num(m.delta) >= 0 ? "+" : "") + num(m.delta), T((cm >= 0 ? "+" : "-") + fmtCm(Math.abs(cm)))];
+    }).filter(Boolean);
+    if (num(SIM.dp)) rows.push(["Demi-palettes", "", "", (num(SIM.dp) >= 0 ? "+" : "") + num(SIM.dp), T((num(SIM.dp) >= 0 ? "+" : "-") + fmtCm(Math.abs(num(SIM.dp) * num(REF.params.dp))))]);
+    if (num(SIM.pal)) rows.push(["Palettes", "", "", (num(SIM.pal) >= 0 ? "+" : "") + num(SIM.pal), T((num(SIM.pal) >= 0 ? "+" : "-") + fmtCm(Math.abs(num(SIM.pal) * num(REF.params.pal))))]);
+    table({
+      head: [["Marque", "Produit", "Format", "Facings", "Linéaire"]],
+      body: rows.length ? rows : [["Aucun mouvement", "", "", "", ""]],
+      columnStyles: { 3: { halign: "right" }, 4: { halign: "right", fontStyle: "bold" } },
+      didParseCell: d => { if (d.section === "body" && String(d.row.raw[4]).startsWith("-")) d.cell.styles.textColor = ROUGE; }
+    });
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text("Résultat", M, y); y += 5;
+    const cible = objectifCm(c.dgp);
+    table({
+      body: [
+        ["LD de départ", T(fmtCm(c.ld0))],
+        ["Facings gagnés ou perdus", T((c.dFacings >= 0 ? "+" : "-") + fmtCm(Math.abs(c.dFacings)))],
+        ["Demi-palettes et palettes", T((c.dSol >= 0 ? "+" : "-") + fmtCm(Math.abs(c.dSol)))],
+        ["LD simulé", T(fmtCm(c.ld))],
+        ["PDL simulée", T(`${fmtCm(c.ld)} / ${fmtCm(c.dgp)} = ${fmtPct(c.pdl)}`)],
+        ...(cible ? [["Objectif", T(`${fmtCm(cible)}, écart ${c.ld - cible >= 0 ? "+" : "-"}${fmtCm(Math.abs(c.ld - cible))}`)]] : [])
+      ],
+      columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+      didParseCell: d => {
+        if (d.section !== "body") return;
+        if ([3, 4].includes(d.row.index)) d.cell.styles.fontStyle = "bold";
+        if (d.row.index === 4) d.cell.styles.textColor = gagne ? VERT : ROUGE;
+        if (cible && d.row.index === 5) d.cell.styles.textColor = c.ld - cible >= 0 ? VERT : ROUGE;
+      }
+    });
+
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i); doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
+      doc.text(T(`Simulation PDL  |  ${R.magasin || ""}  |  édité le ${new Date().toLocaleDateString("fr-FR")}`), M, 290);
+      doc.text(`${i} / ${n}`, W - M, 290, { align: "right" });
+    }
+    const safe = (R.magasin || "simulation").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    await deliverFile(doc.output("blob"), `Simulation_PDL_${safe}.pdf`);
+  } catch (e) {
+    toast(e && e.message === "load" ? "Connexion nécessaire pour générer le PDF" : "Export PDF impossible");
+  } finally { btn.disabled = false; btn.textContent = "Exporter la simulation en PDF"; }
+}
+$("#simPdf").onclick = exportSimPdf;
+
 async function deliverFile(blob, filename) {
   let dl = null;
   if (window.claude && window.claude.use) { try { dl = await window.claude.use("downloads"); } catch {} }
@@ -1264,7 +1389,7 @@ async function persistHist() {
 function renderHist() {
   $("#histList").innerHTML = HIST.length ? HIST.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "")).map(h => `
     <div class="list-item" data-h="${h.id}">
-      <div class="grow"><div style="font-weight:600">${esc(h.magasin || "Sans nom")}</div><div class="meta" style="font-size:13px;color:var(--muted)">${esc(h.date)} · DGP ${fmtCm(h.res.dgp)}</div></div>
+      <div class="grow"><div style="font-weight:600">${esc(h.magasin || "Sans nom")}</div><div class="meta" style="font-size:13px;color:var(--muted)">${esc(h.date)}${h.m1 ? ` · ${esc(h.m1)}` : ""} · DGP ${fmtCm(h.res.dgp)}</div></div>
       <div style="font:700 22px var(--cond)">${fmtPct(h.res.pdl)}</div>
       <button class="btn small" data-hopen>Ouvrir</button>
       <button class="icon-btn" data-hdel aria-label="Supprimer">✕</button>
@@ -1282,7 +1407,7 @@ $("#histList").addEventListener("click", async e => {
 $("#saveReleve").onclick = async () => {
   const c = compute();
   if (!c.dgp) { toast("Renseignez d'abord le rayon"); return; }
-  const entry = { id: R.id, magasin: R.magasin, date: R.date, res: { dgp: c.dgp, ld: c.ld, pdl: c.pdl, pdlPack: c.pdlPack, pdlCab: c.pdlCab }, releve: structuredClone(R) };
+  const entry = { id: R.id, magasin: R.magasin, m1: R.m1, date: R.date, res: { dgp: c.dgp, ld: c.ld, pdl: c.pdl, pdlPack: c.pdlPack, pdlCab: c.pdlCab }, releve: structuredClone(R) };
   HIST = HIST.filter(h => h.id !== R.id).concat(entry); persistHist(); renderHist();
   toast("Relevé enregistré");
 };
@@ -1320,7 +1445,7 @@ function renderRef() {
           <div class="list-item" data-rp="${p.id}">
             <div class="grow">
               <div style="font-weight:600">${esc(p.marque)} ${esc(p.nom)}</div>
-              <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${!isAdmin && !isPublished("produits", p.id) ? `<span class="pill">Ajouté sur ce téléphone</span>` : ""}</div>
+              <div style="font-size:13px;color:var(--muted)">${esc(p.format)} ${p.abi ? `<span class="pill abi">AB InBev</span>` : ""} ${p.segment === "cab" ? `<span class="pill cab">CAB</span>` : ""} ${estCan(p) ? `<span class="pill">CAN</span>` : ""} ${estNab(p) ? `<span class="pill">NAB</span>` : ""} ${!isAdmin && !isPublished("produits", p.id) ? `<span class="pill">Ajouté sur ce téléphone</span>` : ""}</div>
             </div>
             <input class="inline" inputmode="decimal" value="${num(p.largeur)}" data-pw aria-label="Largeur en cm" ${ro}><span class="unit" style="font-size:13px;color:var(--muted)">cm</span>
             ${canEditRef ? `<button class="icon-btn" data-pedit aria-label="Modifier">✎</button><button class="icon-btn" data-pdel aria-label="Retirer">✕</button>` : ""}
@@ -1434,15 +1559,27 @@ function productForm(p, local = false) {
       </div>
       <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pAbi" ${p.abi ? "checked" : ""}> Marque AB InBev</label>
     </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="seg" role="group" aria-label="Contenant" id="pCont">
+        <button type="button" data-c="bouteille" aria-pressed="${!estCan(p)}">Bouteille</button>
+        <button type="button" data-c="can" aria-pressed="${estCan(p)}">Canette</button>
+      </div>
+      <div class="seg" role="group" aria-label="Sans alcool" id="pNab">
+        <button type="button" data-n="non" aria-pressed="${!estNab(p)}">Avec alcool</button>
+        <button type="button" data-n="oui" aria-pressed="${estNab(p)}">NAB (0,0)</button>
+      </div>
+    </div>
     <p class="hint" id="pErr" style="color:var(--danger);margin:0"></p>
     <div class="btn-row">
       <button class="btn primary" id="pSave" style="flex:1">${editing ? "Enregistrer" : "Ajouter"}</button>
       ${editing ? `<button class="btn" id="pDup">Dupliquer</button><button class="btn danger" id="pDel">Supprimer</button>` : ""}
       <button class="btn ghost" id="pCancel">Annuler</button>
     </div>`;
-  let seg = p.segment || "pack";
+  let seg = p.segment || "pack", cont = estCan(p) ? "can" : "bouteille", nab = estNab(p);
   $("#pSeg").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; seg = b.dataset.v; $("#pSeg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
-  const read = () => ({ marque: $("#pMarque").value.trim(), nom: $("#pNom").value.trim(), format: $("#pFormat").value.trim(), largeur: num($("#pLarg").value), segment: seg, abi: $("#pAbi").checked });
+  $("#pCont").onclick = e => { const b = e.target.closest("[data-c]"); if (!b) return; cont = b.dataset.c; $("#pCont").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  $("#pNab").onclick = e => { const b = e.target.closest("[data-n]"); if (!b) return; nab = b.dataset.n === "oui"; $("#pNab").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  const read = () => ({ marque: $("#pMarque").value.trim(), nom: $("#pNom").value.trim(), format: $("#pFormat").value.trim(), largeur: num($("#pLarg").value), segment: seg, abi: $("#pAbi").checked, contenant: cont, nab });
   $("#pMarque").addEventListener("change", () => { const ex = REF.produits.find(x => x.marque.toLowerCase() === $("#pMarque").value.trim().toLowerCase()); if (ex) $("#pAbi").checked = ex.abi; });
   $("#pFormat").addEventListener("change", () => { const ex = REF.produits.find(x => x.format === $("#pFormat").value.trim()); if (ex && !$("#pLarg").value) $("#pLarg").value = ex.largeur; });
   $("#pSave").onclick = () => {
@@ -1467,8 +1604,8 @@ function productForm(p, local = false) {
 function pasteForm() {
   $("#dlgBody").innerHTML = `
     <h3 style="font-size:24px">Coller depuis Excel</h3>
-    <p class="hint" style="margin:0">Copiez les colonnes dans cet ordre : Marque, Produit, Format, Largeur (cm), Segment (Pack ou CAB), AB InBev (Oui ou Non). Un produit déjà présent (même marque, produit et format) voit sa largeur mise à jour.</p>
-    <textarea id="pasteTxt" placeholder="Leffe&#9;Blonde&#9;Pack 12x25cl&#9;26&#9;Pack&#9;Oui"></textarea>
+    <p class="hint" style="margin:0">Copiez les colonnes dans cet ordre : Marque, Produit, Format, Largeur (cm), Segment (Pack ou CAB), AB InBev (Oui ou Non), Contenant (Can ou Bouteille), NAB (Oui ou Non). Les deux dernières colonnes sont facultatives : sans elles, le contenant et le sans alcool sont déduits du format et du nom. Un produit déjà présent (même marque, produit et format) voit sa largeur mise à jour.</p>
+    <textarea id="pasteTxt" placeholder="Leffe&#9;Blonde&#9;Pack 12x25cl&#9;26&#9;Pack&#9;Oui&#9;Bouteille&#9;Non"></textarea>
     <p class="hint" id="pasteInfo" style="margin:0"></p>
     <div class="btn-row"><button class="btn primary" id="pasteGo" style="flex:1">Importer</button><button class="btn ghost" id="pasteCancel">Annuler</button></div>`;
   const parse = () => $("#pasteTxt").value.split(/\r?\n/).map(l => l.split(/\t|;/).map(s => s.trim())).filter(c => c.length >= 4 && c[0] && num(c[3]) > 0);
@@ -1476,8 +1613,11 @@ function pasteForm() {
   $("#pasteGo").onclick = () => {
     const rows = parse(); if (!rows.length) { $("#pasteInfo").textContent = "Aucune ligne valide : vérifiez l'ordre des colonnes et la largeur."; return; }
     let add = 0, upd = 0;
-    rows.forEach(([marque, nom = "", format = "", larg, seg = "pack", abi = ""]) => {
-      const v = { marque, nom, format, largeur: num(larg), segment: /cab|cave/i.test(seg) ? "cab" : "pack", abi: /^(o|oui|y|yes|x|1|vrai|true)/i.test(abi) };
+    const vrai = t => /^(o|oui|y|yes|x|1|vrai|true)/i.test(String(t || "").trim());
+    rows.forEach(([marque, nom = "", format = "", larg, seg = "pack", abi = "", cont = "", nab = ""]) => {
+      const v = { marque, nom, format, largeur: num(larg), segment: /cab|cave/i.test(seg) ? "cab" : "pack", abi: vrai(abi),
+        contenant: cont ? (/can/i.test(cont) ? "can" : "bouteille") : devineContenant(format),
+        nab: nab ? vrai(nab) : devineNab(nom, format) };
       const ex = REF.produits.find(p => p.marque.toLowerCase() === marque.toLowerCase() && p.nom.toLowerCase() === nom.toLowerCase() && p.format.toLowerCase() === format.toLowerCase());
       if (ex) { Object.assign(ex, v); upd++; } else { REF.produits.push({ id: uid(), ...v }); add++; }
     });
